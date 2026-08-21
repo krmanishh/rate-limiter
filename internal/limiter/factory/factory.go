@@ -5,11 +5,13 @@ import (
 
 	"github.com/krmanishh/rate-limiter/internal/config"
 	"github.com/krmanishh/rate-limiter/internal/limiter"
+	"github.com/krmanishh/rate-limiter/internal/limiter/adapter"
 	"github.com/krmanishh/rate-limiter/internal/limiter/fixedwindow"
 	"github.com/krmanishh/rate-limiter/internal/limiter/leakybucket"
 	"github.com/krmanishh/rate-limiter/internal/limiter/slidingcounter"
 	"github.com/krmanishh/rate-limiter/internal/limiter/slidinglog"
 	"github.com/krmanishh/rate-limiter/internal/limiter/tokenbucket"
+	"github.com/krmanishh/rate-limiter/internal/store/redisstore"
 )
 
 func Create(cfg config.RateLimitConfig) (limiter.RateLimiter, error) {
@@ -48,6 +50,22 @@ func fixedWindow(
 		return nil, fmt.Errorf("window size must be greater than 0")
 	}
 
+	if cfg.Storage == config.Redis {
+		if cfg.RedisAddress == "" {
+			return nil, fmt.Errorf("redis address must be set when storage is redis")
+		}
+
+		redisStore := redisstore.New(cfg.RedisAddress)
+
+		redisLimiter := fixedwindow.NewRedis(
+			redisStore,
+			int64(cfg.Limit),
+			cfg.WindowSize,
+		)
+
+		return adapter.NewRedis(redisLimiter), nil
+	}
+
 	return fixedwindow.New(
 		cfg.Limit,
 		cfg.WindowSize,
@@ -63,6 +81,10 @@ func slidingLog(
 
 	if cfg.WindowSize <= 0 {
 		return nil, fmt.Errorf("window size must be greater than 0")
+	}
+
+	if err := requireMemoryStorage(cfg); err != nil {
+		return nil, err
 	}
 
 	return slidinglog.New(
@@ -82,6 +104,10 @@ func slidingCounter(
 		return nil, fmt.Errorf("window size must be greater than 0")
 	}
 
+	if err := requireMemoryStorage(cfg); err != nil {
+		return nil, err
+	}
+
 	return slidingcounter.New(
 		cfg.Limit,
 		cfg.WindowSize,
@@ -97,6 +123,10 @@ func tokenBucket(
 
 	if cfg.RefillRate <= 0 {
 		return nil, fmt.Errorf("refill rate must be greater than 0")
+	}
+
+	if err := requireMemoryStorage(cfg); err != nil {
+		return nil, err
 	}
 
 	return tokenbucket.New(
@@ -116,8 +146,23 @@ func leakyBucket(
 		return nil, fmt.Errorf("leak rate must be greater than 0")
 	}
 
+	if err := requireMemoryStorage(cfg); err != nil {
+		return nil, err
+	}
+
 	return leakybucket.New(
 		cfg.Capacity,
 		cfg.LeakRate,
 	), nil
+}
+
+func requireMemoryStorage(cfg config.RateLimitConfig) error {
+	if cfg.Storage == config.Redis {
+		return fmt.Errorf(
+			"redis storage is not supported for algorithm %q",
+			cfg.Algorithm,
+		)
+	}
+
+	return nil
 }

@@ -1,6 +1,7 @@
 package factory
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -185,17 +186,65 @@ func TestCreate_FixedWindowRedis(t *testing.T) {
 		Algorithm:    config.FixedWindow,
 		Storage:      config.Redis,
 		RedisAddress: "localhost:6379",
-		Limit:        5,
+		Limit:        3,
 		WindowSize:   time.Minute,
 	}
 
 	limiter, err := Create(cfg)
 
 	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+		t.Fatalf(
+			"unexpected error: %v",
+			err,
+		)
 	}
 
 	if limiter == nil {
 		t.Fatal("expected limiter, got nil")
+	}
+
+	key := fmt.Sprintf("factory-test-user-%d", time.Now().UnixNano())
+
+	first := limiter.Allow(key)
+
+	if !first.Allowed {
+		t.Fatal("first request should be allowed")
+	}
+
+	second := limiter.Allow(key)
+
+	if !second.Allowed {
+		t.Fatal("second request should be allowed")
+	}
+
+	third := limiter.Allow(key)
+
+	if !third.Allowed {
+		t.Fatal("third request should be allowed")
+	}
+
+	fourth := limiter.Allow(key)
+
+	if fourth.Allowed {
+		t.Fatal("fourth request should be rejected")
+	}
+}
+
+func TestCreate_RejectsRedisStorageForUnsupportedAlgorithm(t *testing.T) {
+	cfg := config.RateLimitConfig{
+		Algorithm:  config.SlidingLog,
+		Storage:    config.Redis,
+		Limit:      5,
+		WindowSize: time.Minute,
+	}
+
+	limiter, err := Create(cfg)
+
+	if err == nil {
+		t.Fatal("expected error for redis storage on unsupported algorithm")
+	}
+
+	if limiter != nil {
+		t.Fatal("expected nil limiter")
 	}
 }
