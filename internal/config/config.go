@@ -12,8 +12,18 @@ const (
 	LeakyBucket    Algorithm = "leaky_bucket"
 )
 
+type Storage string
+
+const (
+	Memory Storage = "memory"
+	Redis  Storage = "redis"
+)
+
 type RateLimitConfig struct {
 	Algorithm Algorithm
+	Storage   Storage
+
+	RedisAddress string
 
 	// Used by Fixed Window, Sliding Log,
 	// and Sliding Counter.
