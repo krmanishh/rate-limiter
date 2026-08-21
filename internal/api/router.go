@@ -2,7 +2,7 @@ package api
 
 import "net/http"
 
-func NewRouter(handler *Handler) http.Handler {
+func NewRouter(handler *Handler) *http.ServeMux {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc(
@@ -15,6 +15,11 @@ func NewRouter(handler *Handler) http.Handler {
 		healthCheck,
 	)
 
+	mux.HandleFunc(
+		"/api/v1/resource",
+		resourceHandler,
+	)
+
 	return mux
 }
 
@@ -22,9 +27,26 @@ func healthCheck(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set(
+		"Content-Type",
+		"application/json",
+	)
 
 	w.WriteHeader(http.StatusOK)
 
 	w.Write([]byte(`{"status":"ok"}`))
+}
+
+func resourceHandler(
+	w http.ResponseWriter,
+	r *http.Request,
+) {
+	w.Header().Set(
+		"Content-Type",
+		"application/json",
+	)
+
+	w.WriteHeader(http.StatusOK)
+
+	w.Write([]byte(`{"message":"resource accessed successfully"}`))
 }
