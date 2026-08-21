@@ -230,9 +230,149 @@ func TestCreate_FixedWindowRedis(t *testing.T) {
 	}
 }
 
-func TestCreate_RejectsRedisStorageForUnsupportedAlgorithm(t *testing.T) {
+func TestCreate_SlidingLogRedis(t *testing.T) {
 	cfg := config.RateLimitConfig{
-		Algorithm:  config.SlidingLog,
+		Algorithm:    config.SlidingLog,
+		Storage:      config.Redis,
+		RedisAddress: "localhost:6379",
+		Limit:        3,
+		WindowSize:   time.Minute,
+	}
+
+	limiter, err := Create(cfg)
+
+	if err != nil {
+		t.Fatalf(
+			"unexpected error: %v",
+			err,
+		)
+	}
+
+	key := fmt.Sprintf("factory-test-user-%d", time.Now().UnixNano())
+
+	for i := 0; i < 3; i++ {
+		result := limiter.Allow(key)
+
+		if !result.Allowed {
+			t.Fatalf("request %d should be allowed", i+1)
+		}
+	}
+
+	fourth := limiter.Allow(key)
+
+	if fourth.Allowed {
+		t.Fatal("fourth request should be rejected")
+	}
+}
+
+func TestCreate_SlidingCounterRedis(t *testing.T) {
+	cfg := config.RateLimitConfig{
+		Algorithm:    config.SlidingCounter,
+		Storage:      config.Redis,
+		RedisAddress: "localhost:6379",
+		Limit:        3,
+		WindowSize:   time.Minute,
+	}
+
+	limiter, err := Create(cfg)
+
+	if err != nil {
+		t.Fatalf(
+			"unexpected error: %v",
+			err,
+		)
+	}
+
+	key := fmt.Sprintf("factory-test-user-%d", time.Now().UnixNano())
+
+	for i := 0; i < 3; i++ {
+		result := limiter.Allow(key)
+
+		if !result.Allowed {
+			t.Fatalf("request %d should be allowed", i+1)
+		}
+	}
+
+	fourth := limiter.Allow(key)
+
+	if fourth.Allowed {
+		t.Fatal("fourth request should be rejected")
+	}
+}
+
+func TestCreate_TokenBucketRedis(t *testing.T) {
+	cfg := config.RateLimitConfig{
+		Algorithm:    config.TokenBucket,
+		Storage:      config.Redis,
+		RedisAddress: "localhost:6379",
+		Capacity:     3,
+		RefillRate:   2,
+	}
+
+	limiter, err := Create(cfg)
+
+	if err != nil {
+		t.Fatalf(
+			"unexpected error: %v",
+			err,
+		)
+	}
+
+	key := fmt.Sprintf("factory-test-user-%d", time.Now().UnixNano())
+
+	for i := 0; i < 3; i++ {
+		result := limiter.Allow(key)
+
+		if !result.Allowed {
+			t.Fatalf("request %d should be allowed", i+1)
+		}
+	}
+
+	fourth := limiter.Allow(key)
+
+	if fourth.Allowed {
+		t.Fatal("fourth request should be rejected")
+	}
+}
+
+func TestCreate_LeakyBucketRedis(t *testing.T) {
+	cfg := config.RateLimitConfig{
+		Algorithm:    config.LeakyBucket,
+		Storage:      config.Redis,
+		RedisAddress: "localhost:6379",
+		Capacity:     3,
+		LeakRate:     2,
+	}
+
+	limiter, err := Create(cfg)
+
+	if err != nil {
+		t.Fatalf(
+			"unexpected error: %v",
+			err,
+		)
+	}
+
+	key := fmt.Sprintf("factory-test-user-%d", time.Now().UnixNano())
+
+	for i := 0; i < 3; i++ {
+		result := limiter.Allow(key)
+
+		if !result.Allowed {
+			t.Fatalf("request %d should be allowed", i+1)
+		}
+	}
+
+	fourth := limiter.Allow(key)
+
+	if fourth.Allowed {
+		t.Fatal("fourth request should be rejected")
+	}
+}
+
+func TestCreate_RejectsMissingRedisAddress(t *testing.T) {
+	cfg := config.RateLimitConfig{
+		Algorithm:  config.FixedWindow,
 		Storage:    config.Redis,
 		Limit:      5,
 		WindowSize: time.Minute,
@@ -241,7 +381,7 @@ func TestCreate_RejectsRedisStorageForUnsupportedAlgorithm(t *testing.T) {
 	limiter, err := Create(cfg)
 
 	if err == nil {
-		t.Fatal("expected error for redis storage on unsupported algorithm")
+		t.Fatal("expected error for missing redis address")
 	}
 
 	if limiter != nil {

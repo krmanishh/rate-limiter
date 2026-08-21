@@ -51,11 +51,11 @@ func fixedWindow(
 	}
 
 	if cfg.Storage == config.Redis {
-		if cfg.RedisAddress == "" {
-			return nil, fmt.Errorf("redis address must be set when storage is redis")
-		}
+		redisStore, err := newRedisStore(cfg)
 
-		redisStore := redisstore.New(cfg.RedisAddress)
+		if err != nil {
+			return nil, err
+		}
 
 		redisLimiter := fixedwindow.NewRedis(
 			redisStore,
@@ -83,8 +83,20 @@ func slidingLog(
 		return nil, fmt.Errorf("window size must be greater than 0")
 	}
 
-	if err := requireMemoryStorage(cfg); err != nil {
-		return nil, err
+	if cfg.Storage == config.Redis {
+		redisStore, err := newRedisStore(cfg)
+
+		if err != nil {
+			return nil, err
+		}
+
+		redisLimiter := slidinglog.NewRedis(
+			redisStore,
+			int64(cfg.Limit),
+			cfg.WindowSize,
+		)
+
+		return adapter.NewRedis(redisLimiter), nil
 	}
 
 	return slidinglog.New(
@@ -104,8 +116,20 @@ func slidingCounter(
 		return nil, fmt.Errorf("window size must be greater than 0")
 	}
 
-	if err := requireMemoryStorage(cfg); err != nil {
-		return nil, err
+	if cfg.Storage == config.Redis {
+		redisStore, err := newRedisStore(cfg)
+
+		if err != nil {
+			return nil, err
+		}
+
+		redisLimiter := slidingcounter.NewRedis(
+			redisStore,
+			int64(cfg.Limit),
+			cfg.WindowSize,
+		)
+
+		return adapter.NewRedis(redisLimiter), nil
 	}
 
 	return slidingcounter.New(
@@ -125,8 +149,20 @@ func tokenBucket(
 		return nil, fmt.Errorf("refill rate must be greater than 0")
 	}
 
-	if err := requireMemoryStorage(cfg); err != nil {
-		return nil, err
+	if cfg.Storage == config.Redis {
+		redisStore, err := newRedisStore(cfg)
+
+		if err != nil {
+			return nil, err
+		}
+
+		redisLimiter := tokenbucket.NewRedis(
+			redisStore,
+			int64(cfg.Capacity),
+			cfg.RefillRate,
+		)
+
+		return adapter.NewRedis(redisLimiter), nil
 	}
 
 	return tokenbucket.New(
@@ -146,8 +182,20 @@ func leakyBucket(
 		return nil, fmt.Errorf("leak rate must be greater than 0")
 	}
 
-	if err := requireMemoryStorage(cfg); err != nil {
-		return nil, err
+	if cfg.Storage == config.Redis {
+		redisStore, err := newRedisStore(cfg)
+
+		if err != nil {
+			return nil, err
+		}
+
+		redisLimiter := leakybucket.NewRedis(
+			redisStore,
+			int64(cfg.Capacity),
+			cfg.LeakRate,
+		)
+
+		return adapter.NewRedis(redisLimiter), nil
 	}
 
 	return leakybucket.New(
@@ -156,13 +204,12 @@ func leakyBucket(
 	), nil
 }
 
-func requireMemoryStorage(cfg config.RateLimitConfig) error {
-	if cfg.Storage == config.Redis {
-		return fmt.Errorf(
-			"redis storage is not supported for algorithm %q",
-			cfg.Algorithm,
-		)
+func newRedisStore(
+	cfg config.RateLimitConfig,
+) (*redisstore.Client, error) {
+	if cfg.RedisAddress == "" {
+		return nil, fmt.Errorf("redis address must be set when storage is redis")
 	}
 
-	return nil
+	return redisstore.New(cfg.RedisAddress), nil
 }
