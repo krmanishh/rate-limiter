@@ -15,6 +15,7 @@ func clearEnv(t *testing.T) {
 		"RATE_LIMIT_REFILL_RATE",
 		"RATE_LIMIT_LEAK_RATE",
 		"REDIS_ADDR",
+		"SERVER_PORT",
 	}
 
 	for _, key := range keys {
@@ -189,5 +190,26 @@ func TestLoad_RejectsNonNumericLeakRate(t *testing.T) {
 
 	if err == nil {
 		t.Fatal("expected error for non-numeric leak rate")
+	}
+}
+
+func TestLoadServer_Default(t *testing.T) {
+	clearEnv(t)
+
+	cfg := LoadServer()
+
+	if cfg.Port != "8080" {
+		t.Fatalf("expected default port 8080, got %q", cfg.Port)
+	}
+}
+
+func TestLoadServer_Override(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("SERVER_PORT", "9090")
+
+	cfg := LoadServer()
+
+	if cfg.Port != "9090" {
+		t.Fatalf("expected port override 9090, got %q", cfg.Port)
 	}
 }

@@ -2,13 +2,14 @@ package api
 
 import "net/http"
 
-func NewRouter(handler *Handler) *http.ServeMux {
+// NewRouter owns the application's route table. protectedResource is the
+// already middleware-wrapped handler for the rate-limited resource;
+// composing that middleware chain remains the caller's responsibility.
+func NewRouter(
+	handler *Handler,
+	protectedResource http.Handler,
+) *http.ServeMux {
 	mux := http.NewServeMux()
-
-	mux.HandleFunc(
-		"/api/v1/ratelimit/check",
-		handler.CheckRateLimit,
-	)
 
 	mux.HandleFunc(
 		"/health",
@@ -16,8 +17,13 @@ func NewRouter(handler *Handler) *http.ServeMux {
 	)
 
 	mux.HandleFunc(
-		"/api/v1/resource",
-		resourceHandler,
+		"/api/v1/ratelimit/check",
+		handler.CheckRateLimit,
+	)
+
+	mux.Handle(
+		"/api/v1/protected-resource",
+		protectedResource,
 	)
 
 	return mux
@@ -27,26 +33,22 @@ func healthCheck(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	w.Header().Set(
-		"Content-Type",
-		"application/json",
+	writeJSON(
+		w,
+		http.StatusOK,
+		map[string]string{"status": "ok"},
 	)
-
-	w.WriteHeader(http.StatusOK)
-
-	w.Write([]byte(`{"status":"ok"}`))
 }
 
-func resourceHandler(
+// ProtectedResource is the demo resource guarded by the rate limit
+// middleware in cmd/server/main.go.
+func ProtectedResource(
 	w http.ResponseWriter,
 	r *http.Request,
 ) {
-	w.Header().Set(
-		"Content-Type",
-		"application/json",
+	writeJSON(
+		w,
+		http.StatusOK,
+		map[string]string{"message": "protected resource accessed"},
 	)
-
-	w.WriteHeader(http.StatusOK)
-
-	w.Write([]byte(`{"message":"resource accessed successfully"}`))
 }

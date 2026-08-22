@@ -104,5 +104,6 @@ func (r *RedisLimiter) Allow(
 		Allowed:    allowed == 1,
 		Remaining:  int(remaining),
 		RetryAfter: int(retryAfterMs / 1000),
+		Limit:      int(r.capacity),
 	}, nil
 }

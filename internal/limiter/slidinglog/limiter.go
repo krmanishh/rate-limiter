@@ -52,6 +52,7 @@ func (s *SlidingLogLimiter) Allow(key string) limiter.Result {
 			Allowed:    false,
 			Remaining:  0,
 			RetryAfter: int(retryAfter.Seconds()),
+			Limit:      s.limit,
 		}
 	}
 
@@ -63,5 +64,6 @@ func (s *SlidingLogLimiter) Allow(key string) limiter.Result {
 	return limiter.Result{
 		Allowed:   true,
 		Remaining: s.limit - len(timestamps),
+		Limit:     s.limit,
 	}
 }

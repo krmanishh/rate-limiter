@@ -2,6 +2,7 @@ package factory
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/krmanishh/rate-limiter/internal/config"
 	"github.com/krmanishh/rate-limiter/internal/limiter"
@@ -14,7 +15,16 @@ import (
 	"github.com/krmanishh/rate-limiter/internal/store/redisstore"
 )
 
-func Create(cfg config.RateLimitConfig) (limiter.RateLimiter, error) {
+// noopCloser lets callers always call Close() on whatever Create returns,
+// regardless of storage backend, without a type assertion.
+type noopCloser struct{}
+
+func (noopCloser) Close() error { return nil }
+
+// Create builds a rate limiter for the given configuration. The returned
+// io.Closer owns any resources the limiter opened (e.g. a Redis client)
+// and must be closed by the caller once the limiter is no longer needed.
+func Create(cfg config.RateLimitConfig) (limiter.RateLimiter, io.Closer, error) {
 	switch cfg.Algorithm {
 	case config.FixedWindow:
 		return fixedWindow(cfg)
@@ -32,7 +42,7 @@ func Create(cfg config.RateLimitConfig) (limiter.RateLimiter, error) {
 		return leakyBucket(cfg)
 
 	default:
-		return nil, fmt.Errorf(
+		return nil, nil, fmt.Errorf(
 			"unsupported rate limiter algorithm: %s",
 			cfg.Algorithm,
 		)
@@ -41,20 +51,20 @@ func Create(cfg config.RateLimitConfig) (limiter.RateLimiter, error) {
 
 func fixedWindow(
 	cfg config.RateLimitConfig,
-) (limiter.RateLimiter, error) {
+) (limiter.RateLimiter, io.Closer, error) {
 	if cfg.Limit <= 0 {
-		return nil, fmt.Errorf("limit must be greater than 0")
+		return nil, nil, fmt.Errorf("limit must be greater than 0")
 	}
 
 	if cfg.WindowSize <= 0 {
-		return nil, fmt.Errorf("window size must be greater than 0")
+		return nil, nil, fmt.Errorf("window size must be greater than 0")
 	}
 
 	if cfg.Storage == config.Redis {
 		redisStore, err := newRedisStore(cfg)
 
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		redisLimiter := fixedwindow.NewRedis(
@@ -63,31 +73,31 @@ func fixedWindow(
 			cfg.WindowSize,
 		)
 
-		return adapter.NewRedis(redisLimiter), nil
+		return adapter.NewRedis(redisLimiter), redisStore, nil
 	}
 
 	return fixedwindow.New(
 		cfg.Limit,
 		cfg.WindowSize,
-	), nil
+	), noopCloser{}, nil
 }
 
 func slidingLog(
 	cfg config.RateLimitConfig,
-) (limiter.RateLimiter, error) {
+) (limiter.RateLimiter, io.Closer, error) {
 	if cfg.Limit <= 0 {
-		return nil, fmt.Errorf("limit must be greater than 0")
+		return nil, nil, fmt.Errorf("limit must be greater than 0")
 	}
 
 	if cfg.WindowSize <= 0 {
-		return nil, fmt.Errorf("window size must be greater than 0")
+		return nil, nil, fmt.Errorf("window size must be greater than 0")
 	}
 
 	if cfg.Storage == config.Redis {
 		redisStore, err := newRedisStore(cfg)
 
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		redisLimiter := slidinglog.NewRedis(
@@ -96,31 +106,31 @@ func slidingLog(
 			cfg.WindowSize,
 		)
 
-		return adapter.NewRedis(redisLimiter), nil
+		return adapter.NewRedis(redisLimiter), redisStore, nil
 	}
 
 	return slidinglog.New(
 		cfg.Limit,
 		cfg.WindowSize,
-	), nil
+	), noopCloser{}, nil
 }
 
 func slidingCounter(
 	cfg config.RateLimitConfig,
-) (limiter.RateLimiter, error) {
+) (limiter.RateLimiter, io.Closer, error) {
 	if cfg.Limit <= 0 {
-		return nil, fmt.Errorf("limit must be greater than 0")
+		return nil, nil, fmt.Errorf("limit must be greater than 0")
 	}
 
 	if cfg.WindowSize <= 0 {
-		return nil, fmt.Errorf("window size must be greater than 0")
+		return nil, nil, fmt.Errorf("window size must be greater than 0")
 	}
 
 	if cfg.Storage == config.Redis {
 		redisStore, err := newRedisStore(cfg)
 
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		redisLimiter := slidingcounter.NewRedis(
@@ -129,31 +139,31 @@ func slidingCounter(
 			cfg.WindowSize,
 		)
 
-		return adapter.NewRedis(redisLimiter), nil
+		return adapter.NewRedis(redisLimiter), redisStore, nil
 	}
 
 	return slidingcounter.New(
 		cfg.Limit,
 		cfg.WindowSize,
-	), nil
+	), noopCloser{}, nil
 }
 
 func tokenBucket(
 	cfg config.RateLimitConfig,
-) (limiter.RateLimiter, error) {
+) (limiter.RateLimiter, io.Closer, error) {
 	if cfg.Capacity <= 0 {
-		return nil, fmt.Errorf("capacity must be greater than 0")
+		return nil, nil, fmt.Errorf("capacity must be greater than 0")
 	}
 
 	if cfg.RefillRate <= 0 {
-		return nil, fmt.Errorf("refill rate must be greater than 0")
+		return nil, nil, fmt.Errorf("refill rate must be greater than 0")
 	}
 
 	if cfg.Storage == config.Redis {
 		redisStore, err := newRedisStore(cfg)
 
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		redisLimiter := tokenbucket.NewRedis(
@@ -162,31 +172,31 @@ func tokenBucket(
 			cfg.RefillRate,
 		)
 
-		return adapter.NewRedis(redisLimiter), nil
+		return adapter.NewRedis(redisLimiter), redisStore, nil
 	}
 
 	return tokenbucket.New(
 		cfg.Capacity,
 		cfg.RefillRate,
-	), nil
+	), noopCloser{}, nil
 }
 
 func leakyBucket(
 	cfg config.RateLimitConfig,
-) (limiter.RateLimiter, error) {
+) (limiter.RateLimiter, io.Closer, error) {
 	if cfg.Capacity <= 0 {
-		return nil, fmt.Errorf("capacity must be greater than 0")
+		return nil, nil, fmt.Errorf("capacity must be greater than 0")
 	}
 
 	if cfg.LeakRate <= 0 {
-		return nil, fmt.Errorf("leak rate must be greater than 0")
+		return nil, nil, fmt.Errorf("leak rate must be greater than 0")
 	}
 
 	if cfg.Storage == config.Redis {
 		redisStore, err := newRedisStore(cfg)
 
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 
 		redisLimiter := leakybucket.NewRedis(
@@ -195,13 +205,13 @@ func leakyBucket(
 			cfg.LeakRate,
 		)
 
-		return adapter.NewRedis(redisLimiter), nil
+		return adapter.NewRedis(redisLimiter), redisStore, nil
 	}
 
 	return leakybucket.New(
 		cfg.Capacity,
 		cfg.LeakRate,
-	), nil
+	), noopCloser{}, nil
 }
 
 func newRedisStore(

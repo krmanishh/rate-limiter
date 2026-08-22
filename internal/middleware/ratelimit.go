@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log"
 	"net/http"
 	"strconv"
 
@@ -40,7 +41,9 @@ func (m *RateLimitMiddleware) Handler(
 
 			w.WriteHeader(http.StatusTooManyRequests)
 
-			w.Write([]byte(`{"error":"rate limit exceeded"}`))
+			if _, err := w.Write([]byte(`{"error":"rate limit exceeded"}`)); err != nil {
+				log.Printf("failed to write rate limit response: %v", err)
+			}
 
 			return
 		}
@@ -63,6 +66,11 @@ func setRateLimitHeaders(
 	w http.ResponseWriter,
 	result limiter.Result,
 ) {
+	w.Header().Set(
+		"X-RateLimit-Limit",
+		strconv.Itoa(result.Limit),
+	)
+
 	w.Header().Set(
 		"X-RateLimit-Remaining",
 		strconv.Itoa(result.Remaining),

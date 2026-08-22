@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/krmanishh/rate-limiter/internal/limiter"
+	redislimiter "github.com/krmanishh/rate-limiter/internal/limiter/redis"
 	"github.com/krmanishh/rate-limiter/internal/store"
 )
 
@@ -16,7 +17,9 @@ if current == 1 then
 	redis.call("EXPIRE", KEYS[1], ARGV[1])
 end
 
-return current
+local ttl = redis.call("TTL", KEYS[1])
+
+return {current, ttl}
 `
 
 type RedisLimiter struct {
@@ -57,14 +60,13 @@ func (r *RedisLimiter) Allow(
 		return limiter.Result{}, err
 	}
 
-	current, ok := result.(int64)
+	values, err := redislimiter.ParseInts(result, 2)
 
-	if !ok {
-		return limiter.Result{}, fmt.Errorf(
-			"unexpected Redis result type: %T",
-			result,
-		)
+	if err != nil {
+		return limiter.Result{}, err
 	}
+
+	current, ttl := values[0], values[1]
 
 	remaining := r.limit - current
 
@@ -72,9 +74,16 @@ func (r *RedisLimiter) Allow(
 		remaining = 0
 	}
 
+	retryAfter := 0
+
+	if current > r.limit && ttl > 0 {
+		retryAfter = int(ttl)
+	}
+
 	return limiter.Result{
 		Allowed:    current <= r.limit,
 		Remaining:  int(remaining),
-		RetryAfter: 0,
+		RetryAfter: retryAfter,
+		Limit:      int(r.limit),
 	}, nil
 }

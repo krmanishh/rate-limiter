@@ -55,6 +55,7 @@ func (t *TokenBucketLimiter) Allow(key string) limiter.Result {
 			Allowed:    false,
 			Remaining:  0,
 			RetryAfter: int(retryAfter.Seconds()),
+			Limit:      int(t.capacity),
 		}
 	}
 
@@ -63,6 +64,7 @@ func (t *TokenBucketLimiter) Allow(key string) limiter.Result {
 	return limiter.Result{
 		Allowed:   true,
 		Remaining: int(currentBucket.tokens),
+		Limit:     int(t.capacity),
 	}
 }
 

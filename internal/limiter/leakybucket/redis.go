@@ -106,5 +106,6 @@ func (r *RedisLimiter) Allow(
 	return limiter.Result{
 		Allowed:   allowed == 1,
 		Remaining: int(remaining),
+		Limit:     int(r.capacity),
 	}, nil
 }

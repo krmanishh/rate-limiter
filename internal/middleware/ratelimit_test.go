@@ -142,6 +142,15 @@ func TestRateLimitMiddleware_RejectsRequest(t *testing.T) {
 			"expected remaining to be 0",
 		)
 	}
+
+	if second.Header().Get(
+		"X-RateLimit-Limit",
+	) != "1" {
+		t.Fatalf(
+			"expected X-RateLimit-Limit 1, got %q",
+			second.Header().Get("X-RateLimit-Limit"),
+		)
+	}
 }
 
 func TestRateLimitMiddleware_SeparatesAPIKeys(t *testing.T) {

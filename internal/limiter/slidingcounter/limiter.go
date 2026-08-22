@@ -45,6 +45,7 @@ func (s *SlidingCounterLimiter) Allow(key string) limiter.Result {
 		return limiter.Result{
 			Allowed:   true,
 			Remaining: s.limit - 1,
+			Limit:     s.limit,
 		}
 	}
 
@@ -58,6 +59,7 @@ func (s *SlidingCounterLimiter) Allow(key string) limiter.Result {
 			return limiter.Result{
 				Allowed:   false,
 				Remaining: 0,
+				Limit:     s.limit,
 			}
 		}
 
@@ -68,6 +70,7 @@ func (s *SlidingCounterLimiter) Allow(key string) limiter.Result {
 		return limiter.Result{
 			Allowed:   true,
 			Remaining: s.remaining(estimatedCount),
+			Limit:     s.limit,
 		}
 	}
 
@@ -93,6 +96,7 @@ func (s *SlidingCounterLimiter) Allow(key string) limiter.Result {
 		return limiter.Result{
 			Allowed:   false,
 			Remaining: 0,
+			Limit:     s.limit,
 		}
 	}
 
@@ -102,6 +106,7 @@ func (s *SlidingCounterLimiter) Allow(key string) limiter.Result {
 	return limiter.Result{
 		Allowed:   true,
 		Remaining: s.remaining(estimatedCount),
+		Limit:     s.limit,
 	}
 }
 

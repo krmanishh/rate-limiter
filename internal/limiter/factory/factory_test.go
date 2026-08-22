@@ -15,11 +15,13 @@ func TestCreate_FixedWindow(t *testing.T) {
 		WindowSize: time.Minute,
 	}
 
-	limiter, err := Create(cfg)
+	limiter, closer, err := Create(cfg)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
+	defer closer.Close()
 
 	if limiter == nil {
 		t.Fatal("expected limiter, got nil")
@@ -33,11 +35,13 @@ func TestCreate_SlidingLog(t *testing.T) {
 		WindowSize: time.Minute,
 	}
 
-	limiter, err := Create(cfg)
+	limiter, closer, err := Create(cfg)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
+	defer closer.Close()
 
 	if limiter == nil {
 		t.Fatal("expected limiter, got nil")
@@ -51,11 +55,13 @@ func TestCreate_SlidingCounter(t *testing.T) {
 		WindowSize: time.Minute,
 	}
 
-	limiter, err := Create(cfg)
+	limiter, closer, err := Create(cfg)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
+	defer closer.Close()
 
 	if limiter == nil {
 		t.Fatal("expected limiter, got nil")
@@ -69,11 +75,13 @@ func TestCreate_TokenBucket(t *testing.T) {
 		RefillRate: 2,
 	}
 
-	limiter, err := Create(cfg)
+	limiter, closer, err := Create(cfg)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
+	defer closer.Close()
 
 	if limiter == nil {
 		t.Fatal("expected limiter, got nil")
@@ -87,11 +95,13 @@ func TestCreate_LeakyBucket(t *testing.T) {
 		LeakRate:  2,
 	}
 
-	limiter, err := Create(cfg)
+	limiter, closer, err := Create(cfg)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
+	defer closer.Close()
 
 	if limiter == nil {
 		t.Fatal("expected limiter, got nil")
@@ -103,7 +113,7 @@ func TestCreate_RejectsUnknownAlgorithm(t *testing.T) {
 		Algorithm: "unknown",
 	}
 
-	limiter, err := Create(cfg)
+	limiter, closer, err := Create(cfg)
 
 	if err == nil {
 		t.Fatal("expected error for unknown algorithm")
@@ -111,6 +121,10 @@ func TestCreate_RejectsUnknownAlgorithm(t *testing.T) {
 
 	if limiter != nil {
 		t.Fatal("expected nil limiter for invalid algorithm")
+	}
+
+	if closer != nil {
+		t.Fatal("expected nil closer for invalid algorithm")
 	}
 }
 
@@ -121,7 +135,7 @@ func TestCreate_RejectsInvalidFixedWindowConfig(t *testing.T) {
 		WindowSize: time.Minute,
 	}
 
-	limiter, err := Create(cfg)
+	limiter, closer, err := Create(cfg)
 
 	if err == nil {
 		t.Fatal("expected validation error")
@@ -129,6 +143,10 @@ func TestCreate_RejectsInvalidFixedWindowConfig(t *testing.T) {
 
 	if limiter != nil {
 		t.Fatal("expected nil limiter")
+	}
+
+	if closer != nil {
+		t.Fatal("expected nil closer")
 	}
 }
 
@@ -139,7 +157,7 @@ func TestCreate_RejectsInvalidTokenBucketConfig(t *testing.T) {
 		RefillRate: 0,
 	}
 
-	limiter, err := Create(cfg)
+	limiter, closer, err := Create(cfg)
 
 	if err == nil {
 		t.Fatal("expected validation error")
@@ -148,7 +166,12 @@ func TestCreate_RejectsInvalidTokenBucketConfig(t *testing.T) {
 	if limiter != nil {
 		t.Fatal("expected nil limiter")
 	}
+
+	if closer != nil {
+		t.Fatal("expected nil closer")
+	}
 }
+
 func TestCreate_ReturnedLimiterWorks(t *testing.T) {
 	cfg := config.RateLimitConfig{
 		Algorithm:  config.FixedWindow,
@@ -156,11 +179,13 @@ func TestCreate_ReturnedLimiterWorks(t *testing.T) {
 		WindowSize: time.Second,
 	}
 
-	limiter, err := Create(cfg)
+	limiter, closer, err := Create(cfg)
 
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
+
+	defer closer.Close()
 
 	result := limiter.Allow("user-1")
 
@@ -181,6 +206,28 @@ func TestCreate_ReturnedLimiterWorks(t *testing.T) {
 	}
 }
 
+func TestCreate_MemoryStorageReturnsNoopCloser(t *testing.T) {
+	cfg := config.RateLimitConfig{
+		Algorithm:  config.FixedWindow,
+		Limit:      5,
+		WindowSize: time.Minute,
+	}
+
+	_, closer, err := Create(cfg)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if closer == nil {
+		t.Fatal("expected a non-nil closer even for memory storage")
+	}
+
+	if err := closer.Close(); err != nil {
+		t.Fatalf("expected memory storage closer to be a no-op, got error: %v", err)
+	}
+}
+
 func TestCreate_FixedWindowRedis(t *testing.T) {
 	cfg := config.RateLimitConfig{
 		Algorithm:    config.FixedWindow,
@@ -190,7 +237,7 @@ func TestCreate_FixedWindowRedis(t *testing.T) {
 		WindowSize:   time.Minute,
 	}
 
-	limiter, err := Create(cfg)
+	limiter, closer, err := Create(cfg)
 
 	if err != nil {
 		t.Fatalf(
@@ -198,6 +245,8 @@ func TestCreate_FixedWindowRedis(t *testing.T) {
 			err,
 		)
 	}
+
+	defer closer.Close()
 
 	if limiter == nil {
 		t.Fatal("expected limiter, got nil")
@@ -239,7 +288,7 @@ func TestCreate_SlidingLogRedis(t *testing.T) {
 		WindowSize:   time.Minute,
 	}
 
-	limiter, err := Create(cfg)
+	limiter, closer, err := Create(cfg)
 
 	if err != nil {
 		t.Fatalf(
@@ -247,6 +296,8 @@ func TestCreate_SlidingLogRedis(t *testing.T) {
 			err,
 		)
 	}
+
+	defer closer.Close()
 
 	key := fmt.Sprintf("factory-test-user-%d", time.Now().UnixNano())
 
@@ -274,7 +325,7 @@ func TestCreate_SlidingCounterRedis(t *testing.T) {
 		WindowSize:   time.Minute,
 	}
 
-	limiter, err := Create(cfg)
+	limiter, closer, err := Create(cfg)
 
 	if err != nil {
 		t.Fatalf(
@@ -282,6 +333,8 @@ func TestCreate_SlidingCounterRedis(t *testing.T) {
 			err,
 		)
 	}
+
+	defer closer.Close()
 
 	key := fmt.Sprintf("factory-test-user-%d", time.Now().UnixNano())
 
@@ -309,7 +362,7 @@ func TestCreate_TokenBucketRedis(t *testing.T) {
 		RefillRate:   2,
 	}
 
-	limiter, err := Create(cfg)
+	limiter, closer, err := Create(cfg)
 
 	if err != nil {
 		t.Fatalf(
@@ -317,6 +370,8 @@ func TestCreate_TokenBucketRedis(t *testing.T) {
 			err,
 		)
 	}
+
+	defer closer.Close()
 
 	key := fmt.Sprintf("factory-test-user-%d", time.Now().UnixNano())
 
@@ -344,7 +399,7 @@ func TestCreate_LeakyBucketRedis(t *testing.T) {
 		LeakRate:     2,
 	}
 
-	limiter, err := Create(cfg)
+	limiter, closer, err := Create(cfg)
 
 	if err != nil {
 		t.Fatalf(
@@ -352,6 +407,8 @@ func TestCreate_LeakyBucketRedis(t *testing.T) {
 			err,
 		)
 	}
+
+	defer closer.Close()
 
 	key := fmt.Sprintf("factory-test-user-%d", time.Now().UnixNano())
 
@@ -378,7 +435,7 @@ func TestCreate_RejectsMissingRedisAddress(t *testing.T) {
 		WindowSize: time.Minute,
 	}
 
-	limiter, err := Create(cfg)
+	limiter, closer, err := Create(cfg)
 
 	if err == nil {
 		t.Fatal("expected error for missing redis address")
@@ -386,5 +443,33 @@ func TestCreate_RejectsMissingRedisAddress(t *testing.T) {
 
 	if limiter != nil {
 		t.Fatal("expected nil limiter")
+	}
+
+	if closer != nil {
+		t.Fatal("expected nil closer")
+	}
+}
+
+func TestCreate_RedisStorageClosesCleanly(t *testing.T) {
+	cfg := config.RateLimitConfig{
+		Algorithm:    config.FixedWindow,
+		Storage:      config.Redis,
+		RedisAddress: "localhost:6379",
+		Limit:        5,
+		WindowSize:   time.Minute,
+	}
+
+	_, closer, err := Create(cfg)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if closer == nil {
+		t.Fatal("expected a non-nil closer for redis storage")
+	}
+
+	if err := closer.Close(); err != nil {
+		t.Fatalf("expected redis client to close cleanly, got error: %v", err)
 	}
 }

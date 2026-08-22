@@ -49,6 +49,7 @@ func (l *LeakyBucketLimiter) Allow(key string) limiter.Result {
 		return limiter.Result{
 			Allowed:   false,
 			Remaining: 0,
+			Limit:     l.capacity,
 		}
 	}
 
@@ -57,6 +58,7 @@ func (l *LeakyBucketLimiter) Allow(key string) limiter.Result {
 	return limiter.Result{
 		Allowed:   true,
 		Remaining: l.capacity - currentBucket.queueSize,
+		Limit:     l.capacity,
 	}
 }
 

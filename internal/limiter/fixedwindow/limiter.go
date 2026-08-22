@@ -44,6 +44,7 @@ func (f *FixedWindowLimiter) Allow(key string) limiter.Result {
 		return limiter.Result{
 			Allowed:   true,
 			Remaining: f.limit - 1,
+			Limit:     f.limit,
 		}
 	}
 
@@ -54,6 +55,7 @@ func (f *FixedWindowLimiter) Allow(key string) limiter.Result {
 		return limiter.Result{
 			Allowed:   true,
 			Remaining: f.limit - 1,
+			Limit:     f.limit,
 		}
 	}
 
@@ -64,6 +66,7 @@ func (f *FixedWindowLimiter) Allow(key string) limiter.Result {
 			Allowed:    false,
 			Remaining:  0,
 			RetryAfter: int(retryAfter.Seconds()),
+			Limit:      f.limit,
 		}
 	}
 
@@ -72,5 +75,6 @@ func (f *FixedWindowLimiter) Allow(key string) limiter.Result {
 	return limiter.Result{
 		Allowed:   true,
 		Remaining: f.limit - currentWindow.count,
+		Limit:     f.limit,
 	}
 }

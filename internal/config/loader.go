@@ -16,7 +16,23 @@ const (
 	defaultRefillRate   = 2.0
 	defaultLeakRate     = 2.0
 	defaultRedisAddress = "localhost:6379"
+	defaultServerPort   = "8080"
 )
+
+// ServerConfig holds HTTP server settings, loaded from the environment
+// separately from the rate limiter's own configuration.
+type ServerConfig struct {
+	Port string
+}
+
+// LoadServer builds a ServerConfig from environment variables:
+//
+//	SERVER_PORT the HTTP server's listen port (default 8080)
+func LoadServer() ServerConfig {
+	return ServerConfig{
+		Port: getEnv("SERVER_PORT", defaultServerPort),
+	}
+}
 
 // Load builds a RateLimitConfig from environment variables, falling back
 // to sane defaults for anything unset:

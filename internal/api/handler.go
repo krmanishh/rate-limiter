@@ -2,6 +2,7 @@ package api
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/krmanishh/rate-limiter/internal/limiter"
@@ -77,7 +78,9 @@ func writeJSON(
 
 	w.WriteHeader(statusCode)
 
-	_ = json.NewEncoder(w).Encode(data)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		log.Printf("failed to write response: %v", err)
+	}
 }
 
 func writeError(
