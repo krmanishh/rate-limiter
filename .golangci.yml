@@ -1,0 +1,41 @@
+version: "2"
+
+run:
+  timeout: 5m
+
+linters:
+  enable:
+    - errcheck
+    - govet
+    - staticcheck
+    - unused
+    - ineffassign
+    - gocritic
+    - revive
+    - misspell
+    - gosec
+    - unconvert
+    - unparam
+  exclusions:
+    rules:
+      # Ignoring errors from deferred cleanup calls (Close/Delete) in
+      # tests is a standard Go idiom: a cleanup failure isn't a test
+      # failure, and checking it would just add noise.
+      - path: _test\.go
+        linters:
+          - errcheck
+          - gosec
+      # This project deliberately omits doc comments unless they
+      # explain a non-obvious WHY (see house style); don't force
+      # godoc-style comments on every exported symbol and package.
+      # (Scoping this by name in settings.revive.rules would replace
+      # revive's whole default rule set instead of trimming it, so
+      # it's excluded by message text here instead.)
+      - linters:
+          - revive
+        text: "^(exported|package-comments):"
+
+formatters:
+  enable:
+    - gofmt
+    - goimports

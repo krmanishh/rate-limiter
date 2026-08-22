@@ -1,15 +1,33 @@
-# Go
+# Go binaries
+/bin/
+/dist/
 *.exe
+*.exe~
+*.dll
+*.so
+*.dylib
 *.test
+
+# Coverage
 *.out
+coverage.txt
+coverage.html
+*.cover
 
 # IDE
 .idea/
 .vscode/
+*.swp
+*.swo
+.claude/
 
 # OS
 .DS_Store
 
-# Environment
+# Docker
+docker-compose.override.yml
+
+# Environment / local secrets
 .env
 .env.*
+!.env.example

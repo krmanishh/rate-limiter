@@ -99,7 +99,7 @@ func (r *RedisLimiter) Allow(
 		ctx,
 		allowScript,
 		[]string{redisKey},
-		int64(r.window.Milliseconds()),
+		r.window.Milliseconds(),
 		r.limit,
 	)
 

@@ -18,6 +18,13 @@ import (
 const shutdownTimeout = 10 * time.Second
 
 func main() {
+	os.Exit(run())
+}
+
+// run contains the full startup/shutdown lifecycle. It returns the
+// process exit code rather than calling os.Exit itself, so deferred
+// cleanup (stop(), cancel(), closer.Close()) always runs.
+func run() int {
 	cfg, err := config.Load()
 
 	if err != nil {
@@ -113,5 +120,5 @@ func main() {
 
 	log.Println("exiting")
 
-	os.Exit(exitCode)
+	return exitCode
 }

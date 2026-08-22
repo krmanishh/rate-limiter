@@ -31,7 +31,7 @@ func NewRouter(
 
 func healthCheck(
 	w http.ResponseWriter,
-	r *http.Request,
+	_ *http.Request,
 ) {
 	writeJSON(
 		w,
@@ -44,7 +44,7 @@ func healthCheck(
 // middleware in cmd/server/main.go.
 func ProtectedResource(
 	w http.ResponseWriter,
-	r *http.Request,
+	_ *http.Request,
 ) {
 	writeJSON(
 		w,

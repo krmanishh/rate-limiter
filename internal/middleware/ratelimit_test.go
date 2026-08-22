@@ -18,7 +18,7 @@ func TestRateLimitMiddleware_AllowsRequest(t *testing.T) {
 	middleware := NewRateLimitMiddleware(rateLimiter)
 
 	next := http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
+		func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		},
 	)
@@ -70,7 +70,7 @@ func TestRateLimitMiddleware_RejectsRequest(t *testing.T) {
 	nextCalled := 0
 
 	next := http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
+		func(w http.ResponseWriter, _ *http.Request) {
 			nextCalled++
 			w.WriteHeader(http.StatusOK)
 		},
@@ -162,7 +162,7 @@ func TestRateLimitMiddleware_SeparatesAPIKeys(t *testing.T) {
 	middleware := NewRateLimitMiddleware(rateLimiter)
 
 	next := http.HandlerFunc(
-		func(w http.ResponseWriter, r *http.Request) {
+		func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		},
 	)
