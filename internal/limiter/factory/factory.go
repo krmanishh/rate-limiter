@@ -73,7 +73,7 @@ func fixedWindow(
 			cfg.WindowSize,
 		)
 
-		return adapter.NewRedis(redisLimiter), redisStore, nil
+		return adapter.NewRedis(redisLimiter, string(cfg.Algorithm), cfg.Limit, failOpen(cfg)), redisStore, nil
 	}
 
 	return fixedwindow.New(
@@ -106,7 +106,7 @@ func slidingLog(
 			cfg.WindowSize,
 		)
 
-		return adapter.NewRedis(redisLimiter), redisStore, nil
+		return adapter.NewRedis(redisLimiter, string(cfg.Algorithm), cfg.Limit, failOpen(cfg)), redisStore, nil
 	}
 
 	return slidinglog.New(
@@ -139,7 +139,7 @@ func slidingCounter(
 			cfg.WindowSize,
 		)
 
-		return adapter.NewRedis(redisLimiter), redisStore, nil
+		return adapter.NewRedis(redisLimiter, string(cfg.Algorithm), cfg.Limit, failOpen(cfg)), redisStore, nil
 	}
 
 	return slidingcounter.New(
@@ -172,7 +172,7 @@ func tokenBucket(
 			cfg.RefillRate,
 		)
 
-		return adapter.NewRedis(redisLimiter), redisStore, nil
+		return adapter.NewRedis(redisLimiter, string(cfg.Algorithm), cfg.Capacity, failOpen(cfg)), redisStore, nil
 	}
 
 	return tokenbucket.New(
@@ -205,13 +205,17 @@ func leakyBucket(
 			cfg.LeakRate,
 		)
 
-		return adapter.NewRedis(redisLimiter), redisStore, nil
+		return adapter.NewRedis(redisLimiter, string(cfg.Algorithm), cfg.Capacity, failOpen(cfg)), redisStore, nil
 	}
 
 	return leakybucket.New(
 		cfg.Capacity,
 		cfg.LeakRate,
 	), noopCloser{}, nil
+}
+
+func failOpen(cfg config.RateLimitConfig) bool {
+	return cfg.FailMode == config.FailOpen
 }
 
 func newRedisStore(
@@ -221,5 +225,5 @@ func newRedisStore(
 		return nil, fmt.Errorf("redis address must be set when storage is redis")
 	}
 
-	return redisstore.New(cfg.RedisAddress), nil
+	return redisstore.NewWithPassword(cfg.RedisAddress, cfg.RedisPassword), nil
 }

@@ -9,12 +9,14 @@ func clearEnv(t *testing.T) {
 	keys := []string{
 		"RATE_LIMIT_ALGORITHM",
 		"RATE_LIMIT_STORAGE",
+		"RATE_LIMIT_FAIL_MODE",
 		"RATE_LIMIT_LIMIT",
 		"RATE_LIMIT_WINDOW",
 		"RATE_LIMIT_CAPACITY",
 		"RATE_LIMIT_REFILL_RATE",
 		"RATE_LIMIT_LEAK_RATE",
 		"REDIS_ADDR",
+		"REDIS_PASSWORD",
 		"SERVER_PORT",
 	}
 
@@ -63,6 +65,14 @@ func TestLoad_Defaults(t *testing.T) {
 	if cfg.RedisAddress != "localhost:6379" {
 		t.Fatalf("expected default redis address, got %q", cfg.RedisAddress)
 	}
+
+	if cfg.FailMode != FailClosed {
+		t.Fatalf("expected default fail mode %q, got %q", FailClosed, cfg.FailMode)
+	}
+
+	if cfg.RedisPassword != "" {
+		t.Fatalf("expected default redis password to be empty, got %q", cfg.RedisPassword)
+	}
 }
 
 func TestLoad_OverridesFromEnv(t *testing.T) {
@@ -76,6 +86,8 @@ func TestLoad_OverridesFromEnv(t *testing.T) {
 	t.Setenv("RATE_LIMIT_REFILL_RATE", "3.5")
 	t.Setenv("RATE_LIMIT_LEAK_RATE", "1.5")
 	t.Setenv("REDIS_ADDR", "redis-host:6380")
+	t.Setenv("REDIS_PASSWORD", "s3cret")
+	t.Setenv("RATE_LIMIT_FAIL_MODE", "open")
 
 	cfg, err := Load()
 
@@ -113,6 +125,25 @@ func TestLoad_OverridesFromEnv(t *testing.T) {
 
 	if cfg.RedisAddress != "redis-host:6380" {
 		t.Fatalf("expected redis address override, got %q", cfg.RedisAddress)
+	}
+
+	if cfg.FailMode != FailOpen {
+		t.Fatalf("expected fail mode override %q, got %q", FailOpen, cfg.FailMode)
+	}
+
+	if cfg.RedisPassword != "s3cret" {
+		t.Fatalf("expected redis password override, got %q", cfg.RedisPassword)
+	}
+}
+
+func TestLoad_RejectsInvalidFailMode(t *testing.T) {
+	clearEnv(t)
+	t.Setenv("RATE_LIMIT_FAIL_MODE", "not-a-real-fail-mode")
+
+	_, err := Load()
+
+	if err == nil {
+		t.Fatal("expected error for invalid fail mode")
 	}
 }
 

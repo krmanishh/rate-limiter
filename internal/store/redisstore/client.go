@@ -15,8 +15,15 @@ type Client struct {
 }
 
 func New(addr string) *Client {
+	return NewWithPassword(addr, "")
+}
+
+// NewWithPassword connects with Redis AUTH. An empty password behaves
+// exactly like New (go-redis skips AUTH when Password is "").
+func NewWithPassword(addr, password string) *Client {
 	client := redis.NewClient(&redis.Options{
-		Addr: addr,
+		Addr:     addr,
+		Password: password,
 	})
 
 	return &Client{

@@ -10,6 +10,7 @@ import (
 const (
 	defaultAlgorithm    = FixedWindow
 	defaultStorage      = Memory
+	defaultFailMode     = FailClosed
 	defaultLimit        = 5
 	defaultWindow       = time.Minute
 	defaultCapacity     = 10
@@ -39,12 +40,14 @@ func LoadServer() ServerConfig {
 //
 //	RATE_LIMIT_ALGORITHM   fixed_window | sliding_log | sliding_counter | token_bucket | leaky_bucket (default fixed_window)
 //	RATE_LIMIT_STORAGE     memory | redis (default memory)
+//	RATE_LIMIT_FAIL_MODE   closed | open — behavior when Redis errors (default closed)
 //	RATE_LIMIT_LIMIT       requests per window (default 5)
 //	RATE_LIMIT_WINDOW      window size, e.g. "1m", "30s" (default 1m)
 //	RATE_LIMIT_CAPACITY    bucket capacity (default 10)
 //	RATE_LIMIT_REFILL_RATE tokens per second (default 2)
 //	RATE_LIMIT_LEAK_RATE   requests per second (default 2)
 //	REDIS_ADDR             host:port of the Redis server (default localhost:6379)
+//	REDIS_PASSWORD         Redis AUTH password (default "", no AUTH)
 func Load() (RateLimitConfig, error) {
 	algorithm, err := loadAlgorithm()
 
@@ -53,6 +56,12 @@ func Load() (RateLimitConfig, error) {
 	}
 
 	storage, err := loadStorage()
+
+	if err != nil {
+		return RateLimitConfig{}, err
+	}
+
+	failMode, err := loadFailMode()
 
 	if err != nil {
 		return RateLimitConfig{}, err
@@ -89,14 +98,16 @@ func Load() (RateLimitConfig, error) {
 	}
 
 	return RateLimitConfig{
-		Algorithm:    algorithm,
-		Storage:      storage,
-		RedisAddress: getEnv("REDIS_ADDR", defaultRedisAddress),
-		Limit:        limit,
-		WindowSize:   windowSize,
-		Capacity:     capacity,
-		RefillRate:   refillRate,
-		LeakRate:     leakRate,
+		Algorithm:     algorithm,
+		Storage:       storage,
+		FailMode:      failMode,
+		RedisAddress:  getEnv("REDIS_ADDR", defaultRedisAddress),
+		RedisPassword: getEnv("REDIS_PASSWORD", ""),
+		Limit:         limit,
+		WindowSize:    windowSize,
+		Capacity:      capacity,
+		RefillRate:    refillRate,
+		LeakRate:      leakRate,
 	}, nil
 }
 
@@ -123,6 +134,20 @@ func loadStorage() (Storage, error) {
 	default:
 		return "", fmt.Errorf(
 			"invalid RATE_LIMIT_STORAGE: %q",
+			value,
+		)
+	}
+}
+
+func loadFailMode() (FailMode, error) {
+	value := FailMode(getEnv("RATE_LIMIT_FAIL_MODE", string(defaultFailMode)))
+
+	switch value {
+	case FailClosed, FailOpen:
+		return value, nil
+	default:
+		return "", fmt.Errorf(
+			"invalid RATE_LIMIT_FAIL_MODE: %q",
 			value,
 		)
 	}
