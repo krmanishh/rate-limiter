@@ -103,7 +103,7 @@ func (r *RedisLimiter) Allow(
 	return limiter.Result{
 		Allowed:    allowed == 1,
 		Remaining:  int(remaining),
-		RetryAfter: int(retryAfterMs / 1000),
+		RetryAfter: redislimiter.CeilSecondsFromMillis(retryAfterMs),
 		Limit:      int(r.limit),
 	}, nil
 }

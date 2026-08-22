@@ -84,6 +84,13 @@ func TestRedisLimiter(t *testing.T) {
 			result.Remaining,
 		)
 	}
+
+	if result.RetryAfter <= 0 {
+		t.Fatalf(
+			"expected a positive RetryAfter, got %d",
+			result.RetryAfter,
+		)
+	}
 }
 
 // TestRedisLimiter_WindowTransition exercises the current/previous window

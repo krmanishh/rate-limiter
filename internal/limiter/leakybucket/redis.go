@@ -45,7 +45,11 @@ if queue >= capacity then
 	redis.call("HSET", key, "queue", queue, "last_leak", last_leak)
 	redis.call("PEXPIRE", key, ttl_ms)
 
-	return {0, 0}
+	-- Time until the queue leaks enough for one more request to fit.
+	local deficit = queue - capacity + 1
+	local retry_after_ms = math.ceil((deficit / leak_rate) * 1000)
+
+	return {0, 0, retry_after_ms}
 end
 
 queue = queue + 1
@@ -53,7 +57,7 @@ queue = queue + 1
 redis.call("HSET", key, "queue", queue, "last_leak", last_leak)
 redis.call("PEXPIRE", key, ttl_ms)
 
-return {1, capacity - queue}
+return {1, capacity - queue, 0}
 `
 
 type RedisLimiter struct {
@@ -95,17 +99,18 @@ func (r *RedisLimiter) Allow(
 		return limiter.Result{}, err
 	}
 
-	values, err := redislimiter.ParseInts(result, 2)
+	values, err := redislimiter.ParseInts(result, 3)
 
 	if err != nil {
 		return limiter.Result{}, err
 	}
 
-	allowed, remaining := values[0], values[1]
+	allowed, remaining, retryAfterMs := values[0], values[1], values[2]
 
 	return limiter.Result{
-		Allowed:   allowed == 1,
-		Remaining: int(remaining),
-		Limit:     int(r.capacity),
+		Allowed:    allowed == 1,
+		Remaining:  int(remaining),
+		RetryAfter: redislimiter.CeilSecondsFromMillis(retryAfterMs),
+		Limit:      int(r.capacity),
 	}, nil
 }

@@ -28,3 +28,15 @@ func ParseInts(result interface{}, n int) ([]int64, error) {
 
 	return ints, nil
 }
+
+// CeilSecondsFromMillis converts a millisecond duration (as returned by
+// the Lua scripts) to whole seconds, rounding up. Truncating a
+// sub-second wait down to 0 would tell a client to retry before enough
+// time has actually passed.
+func CeilSecondsFromMillis(ms int64) int {
+	if ms <= 0 {
+		return 0
+	}
+
+	return int((ms + 999) / 1000)
+}

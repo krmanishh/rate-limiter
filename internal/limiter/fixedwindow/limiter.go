@@ -65,7 +65,7 @@ func (f *FixedWindowLimiter) Allow(key string) limiter.Result {
 		return limiter.Result{
 			Allowed:    false,
 			Remaining:  0,
-			RetryAfter: int(retryAfter.Seconds()),
+			RetryAfter: limiter.CeilSeconds(retryAfter),
 			Limit:      f.limit,
 		}
 	}

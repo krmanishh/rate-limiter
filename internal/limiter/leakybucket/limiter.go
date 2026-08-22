@@ -1,6 +1,7 @@
 package leakybucket
 
 import (
+	"math"
 	"sync"
 	"time"
 
@@ -47,9 +48,10 @@ func (l *LeakyBucketLimiter) Allow(key string) limiter.Result {
 
 	if currentBucket.queueSize >= l.capacity {
 		return limiter.Result{
-			Allowed:   false,
-			Remaining: 0,
-			Limit:     l.capacity,
+			Allowed:    false,
+			Remaining:  0,
+			RetryAfter: l.retryAfterSeconds(currentBucket),
+			Limit:      l.capacity,
 		}
 	}
 
@@ -81,4 +83,13 @@ func (l *LeakyBucketLimiter) leak(
 	}
 
 	currentBucket.lastLeak = now
+}
+
+// retryAfterSeconds returns the time until the queue leaks enough for
+// one more request to fit: the number of slots over capacity, divided
+// by the leak rate.
+func (l *LeakyBucketLimiter) retryAfterSeconds(currentBucket *bucket) int {
+	deficit := currentBucket.queueSize - l.capacity + 1
+
+	return int(math.Ceil(float64(deficit) / l.leakRate))
 }

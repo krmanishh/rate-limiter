@@ -50,7 +50,29 @@ if estimated >= limit then
 	redis.call("HSET", key, "current", current, "previous", previous, "start", window_start)
 	redis.call("PEXPIRE", key, window_ms * 2)
 
-	return {0, 0}
+	-- Estimate how long until the weighted estimate decays below the
+	-- limit. previous only decays as elapsed grows, so if current
+	-- alone is already at/over the limit, or there's no previous
+	-- contribution to decay, only a window rollover can help.
+	local remaining_capacity = limit - current
+	local retry_after_ms = 0
+
+	if remaining_capacity <= 0 or previous <= 0 then
+		retry_after_ms = window_ms - elapsed
+	else
+		local fraction = remaining_capacity / previous
+
+		if fraction < 1 then
+			local target_elapsed = window_ms - (fraction * window_ms)
+			retry_after_ms = target_elapsed - elapsed
+
+			if retry_after_ms < 0 then
+				retry_after_ms = 0
+			end
+		end
+	end
+
+	return {0, 0, retry_after_ms}
 end
 
 current = current + 1
@@ -65,7 +87,7 @@ if remaining < 0 then
 	remaining = 0
 end
 
-return {1, remaining}
+return {1, remaining, 0}
 `
 
 type RedisLimiter struct {
@@ -107,17 +129,18 @@ func (r *RedisLimiter) Allow(
 		return limiter.Result{}, err
 	}
 
-	values, err := redislimiter.ParseInts(result, 2)
+	values, err := redislimiter.ParseInts(result, 3)
 
 	if err != nil {
 		return limiter.Result{}, err
 	}
 
-	allowed, remaining := values[0], values[1]
+	allowed, remaining, retryAfterMs := values[0], values[1], values[2]
 
 	return limiter.Result{
-		Allowed:   allowed == 1,
-		Remaining: int(remaining),
-		Limit:     int(r.limit),
+		Allowed:    allowed == 1,
+		Remaining:  int(remaining),
+		RetryAfter: redislimiter.CeilSecondsFromMillis(retryAfterMs),
+		Limit:      int(r.limit),
 	}, nil
 }

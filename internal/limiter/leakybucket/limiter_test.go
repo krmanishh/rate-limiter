@@ -56,6 +56,31 @@ func TestLeakyBucket_LeaksOverTime(t *testing.T) {
 	}
 }
 
+func TestLeakyBucket_RetryAfterIsUseful(t *testing.T) {
+	limiter := New(2, 2) // capacity 2, leaks 2/sec
+
+	limiter.Allow("user-1")
+	limiter.Allow("user-1")
+
+	result := limiter.Allow("user-1")
+
+	if result.Allowed {
+		t.Fatal("third request should have been rejected")
+	}
+
+	if result.RetryAfter <= 0 {
+		t.Fatalf("expected a positive RetryAfter, got %d", result.RetryAfter)
+	}
+
+	time.Sleep(time.Duration(result.RetryAfter)*time.Second + 100*time.Millisecond)
+
+	result = limiter.Allow("user-1")
+
+	if !result.Allowed {
+		t.Fatal("request should be allowed after waiting the reported RetryAfter")
+	}
+}
+
 func TestLeakyBucket_SeparatesKeys(t *testing.T) {
 	limiter := New(1, 1)
 
