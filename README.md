@@ -144,6 +144,7 @@ instead of silently misbehaving.
 | `REDIS_ADDR` | `localhost:6379` | `host:port` of the Redis server (only used when storage is `redis`) |
 | `REDIS_PASSWORD` | `` (none) | Redis AUTH password. Empty means no AUTH — fine locally, set this in any real deployment. |
 | `SERVER_PORT` | `8080` | HTTP server listen port |
+| `CORS_ALLOWED_ORIGIN` | `http://localhost:3000` | Origin allowed to call this API from a browser (the frontend's `next dev` origin by default) |
 
 ### Failure behavior: fail-open vs fail-closed
 
@@ -248,6 +249,28 @@ Graceful shutdown works the same way in a container: `docker stop`
 sends `SIGTERM`, which the server catches to finish in-flight requests
 and close its Redis connection before exiting.
 
+## Frontend
+
+[`frontend/`](frontend/README.md) is a Next.js + TypeScript + Tailwind
+CSS "Rate Limiter Playground" — a dashboard that talks to this API
+directly from the browser: server status, the active configuration,
+an algorithm comparison, and a request simulator with a live timeline.
+It's a separate app with its own `package.json`; it doesn't share a
+process or a port with the Go server.
+
+```bash
+# terminal 1: the Go API (memory storage, no Redis needed to try the UI)
+go run ./cmd/server
+
+# terminal 2: the frontend
+cd frontend && npm install && npm run dev
+```
+
+Then open `http://localhost:3000`. The API's default
+`CORS_ALLOWED_ORIGIN` already matches `next dev`'s default port, so no
+extra configuration is needed for local development. See
+[`frontend/README.md`](frontend/README.md) for details.
+
 ## Testing
 
 ```bash
@@ -327,7 +350,8 @@ other jobs/tests use, and benchmarks aren't correctness checks.
 |---|---|---|
 | `GET` | `/health` | Liveness check. Always `200 {"status":"ok"}`. |
 | `GET` | `/api/v1/protected-resource` | Demo resource behind the rate limit middleware. Keyed by the `X-API-Key` header (falls back to remote IP). |
-| `POST` | `/api/v1/ratelimit/check` | Ad-hoc rate decision for an arbitrary key, independent of any specific resource — useful if another service wants to ask "would this be allowed?" without being the protected resource itself. |
+| `POST` | `/api/v1/ratelimit/check` | Ad-hoc rate decision for an arbitrary key, independent of any specific resource — useful if another service wants to ask "would this be allowed?" without being the protected resource itself. Always returns `200`; the decision is in the body (`allowed`/`remaining`/`retry_after`), not the status code. |
+| `GET` | `/api/v1/config` | The server's active rate limit configuration (algorithm, storage, fail mode, and the relevant limit/window/capacity/rate fields) — lets a client render current config without separate access to the server's environment. Redis connection details are never included. |
 | `GET` | `/metrics` | Prometheus exposition format. |
 
 ## Example requests
@@ -370,6 +394,16 @@ curl -s -X POST http://localhost:8080/api/v1/ratelimit/check \
 
 ```json
 {"allowed":true,"remaining":4,"retry_after":0}
+```
+
+Active configuration:
+
+```bash
+curl -s http://localhost:8080/api/v1/config
+```
+
+```json
+{"algorithm":"fixed_window","storage":"memory","fail_mode":"closed","limit":5,"window_seconds":60,"capacity":10,"refill_rate":2,"leak_rate":2}
 ```
 
 ## Response headers
@@ -595,4 +629,6 @@ docker-compose.yml       API + Redis + Prometheus, wired together for local/dev 
 prometheus.yml           Prometheus scrape config (targets the API's /metrics)
 .github/workflows/       CI: build/test/race, lint, vulnerability check
 docs/adr/                Architecture Decision Records
+frontend/                Next.js + TypeScript + Tailwind dashboard (separate app,
+                          see frontend/README.md)
 ```
