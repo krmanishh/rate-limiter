@@ -13,8 +13,14 @@ const OUTCOME_COLOR: Record<ReturnType<typeof outcomeOf>, string> = {
 
 export default function RequestTimeline({
   results,
+  formatTime = (result) => result.timestamp.toLocaleTimeString(),
 }: {
   results: SimulatedRequest[];
+  /** Defaults to a wall-clock time, which is what real request results
+   * carry. The algorithm simulator passes synthetic ms-offset
+   * timestamps instead, which need a different label to stay useful
+   * (they'd otherwise all show the same clock-time). */
+  formatTime?: (result: SimulatedRequest) => string;
 }) {
   if (results.length === 0) return null;
 
@@ -39,7 +45,7 @@ export default function RequestTimeline({
       >
         {results.map((result) => {
           const outcome = outcomeOf(result);
-          const label = `Request ${result.id} at ${result.timestamp.toLocaleTimeString()}: ${
+          const label = `Request ${result.id} at ${formatTime(result)}: ${
             result.error ?? (result.allowed ? "allowed" : "rejected")
           }${!result.error ? `, ${result.remaining} remaining` : ""}`;
 

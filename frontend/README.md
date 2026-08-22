@@ -1,18 +1,52 @@
-# Rate Limiter Playground (frontend)
+# Rate Limiter Admin Console (frontend)
 
-A Next.js + TypeScript + Tailwind CSS dashboard for the Go rate
+A Next.js + TypeScript + Tailwind CSS admin console for the Go rate
 limiter API in the parent directory. It's a plain client — no server
 of its own beyond Next.js itself, no database, no proxy route. Every
 data-fetching component calls the Go API (or Prometheus) directly
 from the browser.
 
-It has two pages:
+It has six pages:
 
 - **`/` — Rate Limiter Playground** (Phase 1): server status, live
   configuration, an algorithm explorer, and a request simulator.
 - **`/observability` — Observability Dashboard** (Phase 2): charts
   and KPIs built from the metrics the Go API already exposes at
   `/metrics`, queried through Prometheus.
+- **`/config` — Configuration** (Phase 3): a read-only view of the
+  server's active settings.
+- **`/keys` — API Keys** (Phase 3): a session-local key tester and
+  per-key request history.
+- **`/algorithms` — Algorithms** (Phase 3): a static comparison table
+  plus an interactive, purely client-side simulator of all five
+  algorithms.
+- **`/system` — System** (Phase 3): an architecture diagram and
+  consolidated backend/Redis/Prometheus health.
+
+Dark mode (a manual toggle in the nav bar, persisted to
+`localStorage`, defaulting to the OS preference) applies across every
+page.
+
+### A note on Phase 3 and what the backend actually supports
+
+The Go API has **no endpoints to change configuration at runtime** and
+**no API key registry** — see `backend/internal/config/loader.go` (env
+vars, read once at startup) and `backend/internal/middleware/ratelimit.go`
+(`X-API-Key` is just an arbitrary string used to partition the rate
+limit, never stored or listed). Rather than build UI that pretends to
+write settings or list keys the backend doesn't track, Phase 3's pages
+are honest about this:
+
+- `/config` shows live values in **disabled** selects, captioned with
+  the environment variable that actually controls each one, plus a
+  banner stating there's no runtime write endpoint.
+- `/keys` tests keys against the real `POST /api/v1/ratelimit/check`
+  and tracks results **only in the current browser session** — it says
+  so explicitly, since there's no backend-side registry to read from.
+- `/algorithms`' simulator runs simplified ports of each algorithm's
+  actual Go logic **in the browser**, labeled as a local simulation —
+  the server only ever runs one algorithm at a time, so this is the
+  only way to compare all five against an identical request pattern.
 
 ## Playground (`/`)
 
@@ -75,6 +109,55 @@ a last-updated timestamp are always available. If Prometheus is
 unreachable, the page shows a single dashboard-wide error with a
 retry button rather than N separately-broken tiles.
 
+## Configuration (`/config`)
+
+Fetches `GET /api/v1/config` once (with a manual Refresh) and renders
+three cards — algorithm, storage backend, and Redis failure policy —
+each with a disabled `<select>` pre-filled with the live value and a
+caption naming the controlling environment variable. The failure
+policy card also shows whether it's currently "in effect" (only
+meaningful when storage is Redis — see `FailMode`'s doc comment in
+`backend/internal/config/config.go`).
+
+## API Keys (`/keys`)
+
+A form sends real requests to `POST /api/v1/ratelimit/check` for a
+given key; results are tracked per-key in memory (via
+`hooks/useKeyInspector.ts`) for as long as the page stays open. The
+overview table aggregates each tracked key's sent/allowed/rejected
+counts; selecting a key reuses the Playground's `RequestTimeline` and
+`ResultsTable` components to show its full history. Nothing here is
+read from or written to a backend-side key registry, because one
+doesn't exist.
+
+## Algorithms (`/algorithms`)
+
+- **Comparison table** — the same descriptions/pros/cons/parameters
+  from `lib/algorithms.ts` (used by the Playground's Algorithm
+  Explorer), laid out side by side for all five algorithms at once.
+- **Simulator** — `lib/algorithmSimulation.ts` ports each algorithm's
+  `Allow()` logic from `backend/internal/limiter/*/limiter.go` into
+  TypeScript, then runs all five against the same synthetic sequence
+  of request offsets (configurable count/interval, plus each
+  algorithm's real parameters). Results render as five
+  `RequestTimeline`s so the algorithms' different behaviors under
+  identical load are visually comparable. This never touches the
+  network — it's a pure, deterministic, in-browser calculation.
+
+## System (`/system`)
+
+- **Health row** — backend (`StatusPanel`, reused from the
+  Playground), Prometheus (reachability inferred from a live query,
+  since Prometheus's `/-/healthy` doesn't send CORS headers the way
+  `/api/v1/*` does), and Redis (`RedisHealthTile`, reused from the
+  Observability Dashboard, fed by a single lightweight query in
+  `hooks/usePrometheusSignal.ts` rather than a second copy of that
+  logic).
+- **Architecture diagram** — a static, plain-HTML/CSS picture of the
+  request path (client → API → rate limit middleware → store) and the
+  observability path (API → `/metrics` → Prometheus → this dashboard),
+  annotated with the live algorithm/storage from `/api/v1/config`.
+
 ## Running it
 
 Requires Node 20+.
@@ -113,19 +196,26 @@ change.
 ```
 src/
   app/
-    layout.tsx            Root layout, metadata, fonts, top nav
+    layout.tsx            Root layout, metadata, fonts, top nav, no-flash
+                          dark mode init script
     page.tsx               Playground page (Phase 1)
-    globals.css            Tailwind entry point + CSS variables
-    observability/
-      page.tsx              Observability Dashboard page (Phase 2)
+    globals.css            Tailwind entry point + CSS variables + dark variant
+    observability/page.tsx  Observability Dashboard page (Phase 2)
+    config/page.tsx          Configuration page (Phase 3)
+    keys/page.tsx             API Keys page (Phase 3)
+    algorithms/page.tsx        Algorithms page (Phase 3)
+    system/page.tsx             System page (Phase 3)
 
   components/
-    StatusPanel.tsx        Server status (GET /health, polled) — reused
-                            on both pages
+    NavBar.tsx              Top nav: active links, mobile menu, theme toggle
+    ThemeToggle.tsx          Dark/light switch (localStorage + useSyncExternalStore)
+    StatusPanel.tsx        Server status (GET /health, polled) — reused widely
     ConfigPanel.tsx         Active configuration (GET /api/v1/config)
     AlgorithmExplorer.tsx   Educational algorithm selector + pros/cons
     RequestSimulator.tsx    The key/count form and run loop
-    RequestTimeline.tsx     Colored-block visual timeline
+    RequestTimeline.tsx     Colored-block visual timeline (formatTime is
+                            pluggable — the Algorithms simulator uses it
+                            for ms-offsets instead of wall-clock time)
     ResultsTable.tsx        Per-request results table
     ui/                     Small reusable primitives: Card, Badge,
                             Button, Select, Spinner, EmptyState, ErrorState
@@ -136,12 +226,32 @@ src/
       AllowedVsRejectedChart.tsx
       AlgorithmUsageChart.tsx
       LatencyChart.tsx
-      RedisHealthTile.tsx      Inferred Redis health (see above)
+      RedisHealthTile.tsx      Inferred Redis health — reused on /system too
+    config/
+      ReadOnlySetting.tsx      Disabled <select> + "set via env var X" caption
+      AlgorithmConfigCard.tsx
+      StorageConfigCard.tsx
+      FailPolicyConfigCard.tsx
+    keys/
+      KeyForm.tsx              Test-a-key form
+      KeyTable.tsx             Tracked keys + per-row run/stop/remove
+      KeyAnalyticsPanel.tsx    Reuses RequestTimeline/ResultsTable per key
+    algorithms/
+      ComparisonTable.tsx      Static side-by-side algorithm comparison
+      SimulatorControls.tsx    Shared limiter params + request pattern inputs
+      SimulatorResults.tsx     Runs all 5 simulations, renders 5 timelines
+    system/
+      ArchitectureDiagram.tsx  Static request/observability path diagram
+      PrometheusHealthTile.tsx
 
   hooks/
     useObservabilityData.ts  Fetches everything the dashboard needs from
                               Prometheus in one batch; the single source
                               of truth so chart/tile components stay pure
+    useConfig.ts               Shared GET /api/v1/config fetch (config + system pages)
+    useKeyInspector.ts          Per-key session state + the real check() run loop
+    usePrometheusSignal.ts      One lightweight query used for both Prometheus
+                                reachability and the Redis-health inference
 
   lib/
     types.ts            TypeScript types mirroring the Go API's JSON
@@ -150,6 +260,8 @@ src/
     api.ts               Typed fetch wrappers + error handling for the Go API
     algorithms.ts         Static metadata: descriptions, pros/cons, and
                           which config fields apply to each algorithm
+    algorithmSimulation.ts  Pure, dependency-free ports of each algorithm's
+                            real Go Allow() logic, for the /algorithms simulator
     prometheus.ts          Thin client for Prometheus's HTTP query API
     observabilityQueries.ts  All PromQL used by the dashboard, plus time
                               range / refresh interval presets
