@@ -73,3 +73,20 @@ jobs:
         uses: golangci/golangci-lint-action@v8
         with:
           version: v2.13.1
+
+  vulncheck:
+    name: Vulnerability check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
