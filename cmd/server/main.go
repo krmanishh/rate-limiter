@@ -53,7 +53,7 @@ func run() int {
 		return 1
 	}
 
-	handler := api.NewHandler(rateLimiter)
+	handler := api.NewHandler(rateLimiter, cfg)
 
 	rateLimitMiddleware := middleware.NewRateLimitMiddleware(
 		rateLimiter,
@@ -67,11 +67,13 @@ func run() int {
 
 	router := api.NewRouter(handler, protectedResource)
 
+	corsRouter := middleware.CORS(serverCfg.CORSAllowedOrigin, router)
+
 	addr := ":" + serverCfg.Port
 
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           router,
+		Handler:           corsRouter,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       readTimeout,
 		WriteTimeout:      writeTimeout,
@@ -93,6 +95,7 @@ func run() int {
 			"addr", addr,
 			"algorithm", cfg.Algorithm,
 			"storage", cfg.Storage,
+			"cors_allowed_origin", serverCfg.CORSAllowedOrigin,
 		)
 
 		serverErr <- server.ListenAndServe()

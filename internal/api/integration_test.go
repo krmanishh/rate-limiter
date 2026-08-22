@@ -39,7 +39,7 @@ func newIntegrationServer(t *testing.T, cfg config.RateLimitConfig) *httptest.Se
 		}
 	})
 
-	handler := api.NewHandler(rateLimiter)
+	handler := api.NewHandler(rateLimiter, cfg)
 
 	rateLimitMiddleware := middleware.NewRateLimitMiddleware(
 		rateLimiter,

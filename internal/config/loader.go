@@ -18,20 +18,26 @@ const (
 	defaultLeakRate     = 2.0
 	defaultRedisAddress = "localhost:6379"
 	defaultServerPort   = "8080"
+	defaultCORSOrigin   = "http://localhost:3000"
 )
 
 // ServerConfig holds HTTP server settings, loaded from the environment
 // separately from the rate limiter's own configuration.
 type ServerConfig struct {
-	Port string
+	Port              string
+	CORSAllowedOrigin string
 }
 
 // LoadServer builds a ServerConfig from environment variables:
 //
-//	SERVER_PORT the HTTP server's listen port (default 8080)
+//	SERVER_PORT         the HTTP server's listen port (default 8080)
+//	CORS_ALLOWED_ORIGIN origin allowed to call this API from a browser
+//	                    (default http://localhost:3000, the frontend's
+//	                    local dev server)
 func LoadServer() ServerConfig {
 	return ServerConfig{
-		Port: getEnv("SERVER_PORT", defaultServerPort),
+		Port:              getEnv("SERVER_PORT", defaultServerPort),
+		CORSAllowedOrigin: getEnv("CORS_ALLOWED_ORIGIN", defaultCORSOrigin),
 	}
 }
 

@@ -28,6 +28,11 @@ func NewRouter(
 	)
 
 	mux.Handle(
+		"/api/v1/config",
+		middleware.HTTPMetrics("/api/v1/config", http.HandlerFunc(handler.GetConfig)),
+	)
+
+	mux.Handle(
 		"/api/v1/protected-resource",
 		middleware.HTTPMetrics("/api/v1/protected-resource", protectedResource),
 	)

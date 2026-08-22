@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/krmanishh/rate-limiter/internal/config"
 	"github.com/krmanishh/rate-limiter/internal/limiter"
 	"github.com/krmanishh/rate-limiter/internal/model"
 )
@@ -17,12 +18,37 @@ const maxCheckRequestBodyBytes = 1 << 10
 
 type Handler struct {
 	limiter limiter.RateLimiter
+	cfg     config.RateLimitConfig
 }
 
-func NewHandler(rateLimiter limiter.RateLimiter) *Handler {
+func NewHandler(rateLimiter limiter.RateLimiter, cfg config.RateLimitConfig) *Handler {
 	return &Handler{
 		limiter: rateLimiter,
+		cfg:     cfg,
 	}
+}
+
+// GetConfig reports the server's active rate limit configuration, so a
+// client (e.g. a dashboard) can display it without separate access to
+// the server's environment.
+func (h *Handler) GetConfig(
+	w http.ResponseWriter,
+	_ *http.Request,
+) {
+	writeJSON(
+		w,
+		http.StatusOK,
+		model.ConfigResponse{
+			Algorithm:     string(h.cfg.Algorithm),
+			Storage:       string(h.cfg.Storage),
+			FailMode:      string(h.cfg.FailMode),
+			Limit:         h.cfg.Limit,
+			WindowSeconds: int(h.cfg.WindowSize.Seconds()),
+			Capacity:      h.cfg.Capacity,
+			RefillRate:    h.cfg.RefillRate,
+			LeakRate:      h.cfg.LeakRate,
+		},
+	)
 }
 
 func (h *Handler) CheckRateLimit(
