@@ -2,6 +2,8 @@ package fixedwindow
 
 import (
 	"context"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -90,6 +92,72 @@ func TestRedisLimiter(t *testing.T) {
 		t.Fatalf(
 			"expected remaining 0, got %d",
 			result.Remaining,
+		)
+	}
+}
+
+// TestRedisLimiter_Concurrent proves that INCR + EXPIRE are applied
+// atomically inside the Lua script: firing more requests than the limit
+// at once must still let exactly `limit` of them through, with no races
+// letting extras slip in.
+func TestRedisLimiter_Concurrent(t *testing.T) {
+	ctx := context.Background()
+
+	redisStore := redisstore.New("localhost:6379")
+
+	defer redisStore.Close()
+
+	if err := redisStore.Ping(ctx); err != nil {
+		t.Fatalf("Redis is not available: %v", err)
+	}
+
+	const limit = 5
+	const attempts = 10
+
+	limiter := NewRedis(
+		redisStore,
+		limit,
+		time.Minute,
+	)
+
+	key := "concurrent-user-" + time.Now().Format("20060102150405.000000000")
+
+	defer redisStore.Delete(
+		ctx,
+		"rate-limit:fixed:"+key,
+	)
+
+	var wg sync.WaitGroup
+
+	var allowedCount int64
+
+	for i := 0; i < attempts; i++ {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			result, err := limiter.Allow(ctx, key)
+
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			if result.Allowed {
+				atomic.AddInt64(&allowedCount, 1)
+			}
+		}()
+	}
+
+	wg.Wait()
+
+	if allowedCount != limit {
+		t.Fatalf(
+			"expected exactly %d allowed requests out of %d concurrent attempts, got %d",
+			limit,
+			attempts,
+			allowedCount,
 		)
 	}
 }

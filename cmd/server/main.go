@@ -12,10 +12,13 @@ import (
 )
 
 func main() {
-	cfg := config.RateLimitConfig{
-		Algorithm:  config.FixedWindow,
-		Limit:      5,
-		WindowSize: time.Minute,
+	cfg, err := config.Load()
+
+	if err != nil {
+		log.Fatalf(
+			"failed to load config: %v",
+			err,
+		)
 	}
 
 	rateLimiter, err := factory.Create(cfg)
@@ -50,8 +53,10 @@ func main() {
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	log.Println(
-		"rate limiter server running on :8080",
+	log.Printf(
+		"rate limiter server running on :8080 (algorithm=%s storage=%s)",
+		cfg.Algorithm,
+		cfg.Storage,
 	)
 
 	err = server.ListenAndServe()
