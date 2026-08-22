@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: rate-limiter
+    # Same rule as REDIS_ADDR: "rate-limiter" is the Compose service
+    # name, resolved on the shared Docker network — not localhost.
+    static_configs:
+      - targets: ["rate-limiter:8080"]

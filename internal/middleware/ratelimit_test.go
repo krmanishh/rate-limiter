@@ -15,7 +15,7 @@ func TestRateLimitMiddleware_AllowsRequest(t *testing.T) {
 		time.Minute,
 	)
 
-	middleware := NewRateLimitMiddleware(rateLimiter)
+	middleware := NewRateLimitMiddleware(rateLimiter, "fixed_window", "memory")
 
 	next := http.HandlerFunc(
 		func(w http.ResponseWriter, _ *http.Request) {
@@ -65,7 +65,7 @@ func TestRateLimitMiddleware_RejectsRequest(t *testing.T) {
 		time.Minute,
 	)
 
-	middleware := NewRateLimitMiddleware(rateLimiter)
+	middleware := NewRateLimitMiddleware(rateLimiter, "fixed_window", "memory")
 
 	nextCalled := 0
 
@@ -159,7 +159,7 @@ func TestRateLimitMiddleware_SeparatesAPIKeys(t *testing.T) {
 		time.Minute,
 	)
 
-	middleware := NewRateLimitMiddleware(rateLimiter)
+	middleware := NewRateLimitMiddleware(rateLimiter, "fixed_window", "memory")
 
 	next := http.HandlerFunc(
 		func(w http.ResponseWriter, _ *http.Request) {
@@ -209,5 +209,44 @@ func TestRateLimitMiddleware_SeparatesAPIKeys(t *testing.T) {
 
 	if user2First.Code != http.StatusOK {
 		t.Fatal("user-2 should have its own rate limit")
+	}
+}
+
+func TestRateLimitMiddleware_IPFallbackIgnoresEphemeralPort(t *testing.T) {
+	rateLimiter := fixedwindow.New(1, time.Minute)
+
+	middleware := NewRateLimitMiddleware(rateLimiter, "fixed_window", "memory")
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	handler := middleware.Handler(next)
+
+	// Two requests from the same client IP but different ephemeral
+	// ports, as two real connections/requests from the same client
+	// would actually look. No X-API-Key, so this exercises the IP
+	// fallback path.
+	first := httptest.NewRequest(http.MethodGet, "/test", nil)
+	first.RemoteAddr = "203.0.113.5:51234"
+
+	firstRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(firstRecorder, first)
+
+	if firstRecorder.Code != http.StatusOK {
+		t.Fatalf("expected first request to be allowed, got %d", firstRecorder.Code)
+	}
+
+	second := httptest.NewRequest(http.MethodGet, "/test", nil)
+	second.RemoteAddr = "203.0.113.5:60000"
+
+	secondRecorder := httptest.NewRecorder()
+	handler.ServeHTTP(secondRecorder, second)
+
+	if secondRecorder.Code != http.StatusTooManyRequests {
+		t.Fatalf(
+			"expected second request from the same IP (different port) to share the same rate limit bucket and be rejected, got %d",
+			secondRecorder.Code,
+		)
 	}
 }

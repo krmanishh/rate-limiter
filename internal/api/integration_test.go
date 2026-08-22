@@ -3,14 +3,19 @@ package api_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/krmanishh/rate-limiter/internal/api"
 	"github.com/krmanishh/rate-limiter/internal/config"
 	"github.com/krmanishh/rate-limiter/internal/limiter/factory"
+	"github.com/krmanishh/rate-limiter/internal/metrics"
 	"github.com/krmanishh/rate-limiter/internal/middleware"
 	"github.com/krmanishh/rate-limiter/internal/store/redisstore"
 )
@@ -36,7 +41,11 @@ func newIntegrationServer(t *testing.T, cfg config.RateLimitConfig) *httptest.Se
 
 	handler := api.NewHandler(rateLimiter)
 
-	rateLimitMiddleware := middleware.NewRateLimitMiddleware(rateLimiter)
+	rateLimitMiddleware := middleware.NewRateLimitMiddleware(
+		rateLimiter,
+		string(cfg.Algorithm),
+		string(cfg.Storage),
+	)
 
 	protectedResource := rateLimitMiddleware.Handler(
 		http.HandlerFunc(api.ProtectedResource),
@@ -146,6 +155,118 @@ func TestIntegration_ProtectedResource_Memory(t *testing.T) {
 	apiKey := fmt.Sprintf("integration-user-%d", time.Now().UnixNano())
 
 	exerciseProtectedResource(t, server, apiKey, 5)
+}
+
+func TestIntegration_HTTPMetrics(t *testing.T) {
+	server := newIntegrationServer(t, config.RateLimitConfig{
+		Algorithm:  config.FixedWindow,
+		Storage:    config.Memory,
+		Limit:      1,
+		WindowSize: time.Minute,
+	})
+
+	client := server.Client()
+
+	healthBefore := testutil.ToFloat64(metrics.HTTPRequestsTotal.WithLabelValues(http.MethodGet, "/health", "200"))
+
+	resp, err := client.Get(server.URL + "/health")
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200, got %d", resp.StatusCode)
+	}
+
+	healthAfter := testutil.ToFloat64(metrics.HTTPRequestsTotal.WithLabelValues(http.MethodGet, "/health", "200"))
+
+	if healthAfter-healthBefore != 1 {
+		t.Fatalf(
+			"expected http_requests_total{method=GET,route=/health,status=200} to increase by 1, got %v -> %v",
+			healthBefore,
+			healthAfter,
+		)
+	}
+
+	apiKey := fmt.Sprintf("http-metrics-user-%d", time.Now().UnixNano())
+	route := "/api/v1/protected-resource"
+
+	allowedBefore := testutil.ToFloat64(metrics.HTTPRequestsTotal.WithLabelValues(http.MethodGet, route, "200"))
+	rejectedBefore := testutil.ToFloat64(metrics.HTTPRequestsTotal.WithLabelValues(http.MethodGet, route, "429"))
+
+	for i, wantStatus := range []int{http.StatusOK, http.StatusTooManyRequests} {
+		req, err := http.NewRequest(http.MethodGet, server.URL+route, nil)
+
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		req.Header.Set("X-API-Key", apiKey)
+
+		resp, err := client.Do(req)
+
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		resp.Body.Close()
+
+		if resp.StatusCode != wantStatus {
+			t.Fatalf("request %d: expected %d, got %d", i+1, wantStatus, resp.StatusCode)
+		}
+	}
+
+	allowedAfter := testutil.ToFloat64(metrics.HTTPRequestsTotal.WithLabelValues(http.MethodGet, route, "200"))
+	rejectedAfter := testutil.ToFloat64(metrics.HTTPRequestsTotal.WithLabelValues(http.MethodGet, route, "429"))
+
+	if allowedAfter-allowedBefore != 1 {
+		t.Fatalf(
+			"expected http_requests_total{route=%s,status=200} to increase by 1, got %v -> %v",
+			route,
+			allowedBefore,
+			allowedAfter,
+		)
+	}
+
+	if rejectedAfter-rejectedBefore != 1 {
+		t.Fatalf(
+			"expected http_requests_total{route=%s,status=429} to increase by 1, got %v -> %v",
+			route,
+			rejectedBefore,
+			rejectedAfter,
+		)
+	}
+
+	// /metrics itself should serve Prometheus-compatible plaintext
+	// exposition containing the counters this test just moved.
+	metricsResp, err := client.Get(server.URL + "/metrics")
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	defer metricsResp.Body.Close()
+
+	if metricsResp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 from /metrics, got %d", metricsResp.StatusCode)
+	}
+
+	body, err := io.ReadAll(metricsResp.Body)
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if !strings.Contains(string(body), "http_requests_total") {
+		t.Fatal("expected /metrics output to contain http_requests_total")
+	}
+
+	if !strings.Contains(string(body), "rate_limit_requests_total") {
+		t.Fatal("expected /metrics output to contain rate_limit_requests_total")
+	}
 }
 
 func TestIntegration_ProtectedResource_Redis(t *testing.T) {

@@ -2,12 +2,18 @@ package api
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"github.com/krmanishh/rate-limiter/internal/limiter"
 	"github.com/krmanishh/rate-limiter/internal/model"
 )
+
+// maxCheckRequestBodyBytes caps the /api/v1/ratelimit/check request body.
+// The only expected payload is {"key":"..."}; 1 KiB is generous headroom
+// while still preventing an oversized or malicious body from being
+// buffered in full before decoding fails.
+const maxCheckRequestBodyBytes = 1 << 10
 
 type Handler struct {
 	limiter limiter.RateLimiter
@@ -31,6 +37,8 @@ func (h *Handler) CheckRateLimit(
 		)
 		return
 	}
+
+	r.Body = http.MaxBytesReader(w, r.Body, maxCheckRequestBodyBytes)
 
 	var request model.RateLimitRequest
 
@@ -79,7 +87,7 @@ func writeJSON(
 	w.WriteHeader(statusCode)
 
 	if err := json.NewEncoder(w).Encode(data); err != nil {
-		log.Printf("failed to write response: %v", err)
+		slog.Error("failed to write response", "error", err)
 	}
 }
 

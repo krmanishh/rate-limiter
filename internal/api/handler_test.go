@@ -200,3 +200,37 @@ func TestCheckRateLimit_RejectsWrongMethod(t *testing.T) {
 		)
 	}
 }
+
+func TestCheckRateLimit_RejectsOversizedBody(t *testing.T) {
+	rateLimiter := fixedwindow.New(
+		5,
+		time.Minute,
+	)
+
+	handler := NewHandler(rateLimiter)
+
+	// Oversized JSON body: a key far bigger than any real payload
+	// should ever need, well past the 1 KiB cap.
+	oversizedKey := strings.Repeat("a", 2<<10)
+	body := `{"key":"` + oversizedKey + `"}`
+
+	request := httptest.NewRequest(
+		http.MethodPost,
+		"/api/v1/ratelimit/check",
+		strings.NewReader(body),
+	)
+
+	recorder := httptest.NewRecorder()
+
+	handler.CheckRateLimit(
+		recorder,
+		request,
+	)
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf(
+			"expected status 400 for an oversized body, got %d",
+			recorder.Code,
+		)
+	}
+}

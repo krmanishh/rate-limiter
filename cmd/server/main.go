@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,9 +15,21 @@ import (
 	"github.com/krmanishh/rate-limiter/internal/middleware"
 )
 
-const shutdownTimeout = 10 * time.Second
+const (
+	shutdownTimeout = 10 * time.Second
+
+	// Hardening against slow/stalled clients (e.g. slowloris-style
+	// resource exhaustion): bound how long a single request can take
+	// to send/receive, and how long an idle keep-alive connection is
+	// held open.
+	readTimeout  = 10 * time.Second
+	writeTimeout = 10 * time.Second
+	idleTimeout  = 120 * time.Second
+)
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
+
 	os.Exit(run())
 }
 
@@ -28,10 +40,8 @@ func run() int {
 	cfg, err := config.Load()
 
 	if err != nil {
-		log.Fatalf(
-			"failed to load config: %v",
-			err,
-		)
+		slog.Error("failed to load config", "error", err)
+		return 1
 	}
 
 	serverCfg := config.LoadServer()
@@ -39,15 +49,17 @@ func run() int {
 	rateLimiter, closer, err := factory.Create(cfg)
 
 	if err != nil {
-		log.Fatalf(
-			"failed to create rate limiter: %v",
-			err,
-		)
+		slog.Error("failed to create rate limiter", "error", err)
+		return 1
 	}
 
 	handler := api.NewHandler(rateLimiter)
 
-	rateLimitMiddleware := middleware.NewRateLimitMiddleware(rateLimiter)
+	rateLimitMiddleware := middleware.NewRateLimitMiddleware(
+		rateLimiter,
+		string(cfg.Algorithm),
+		string(cfg.Storage),
+	)
 
 	protectedResource := rateLimitMiddleware.Handler(
 		http.HandlerFunc(api.ProtectedResource),
@@ -61,6 +73,9 @@ func run() int {
 		Addr:              addr,
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       readTimeout,
+		WriteTimeout:      writeTimeout,
+		IdleTimeout:       idleTimeout,
 	}
 
 	ctx, stop := signal.NotifyContext(
@@ -73,11 +88,11 @@ func run() int {
 	serverErr := make(chan error, 1)
 
 	go func() {
-		log.Printf(
-			"rate limiter server running on %s (algorithm=%s storage=%s)",
-			addr,
-			cfg.Algorithm,
-			cfg.Storage,
+		slog.Info(
+			"rate limiter server starting",
+			"addr", addr,
+			"algorithm", cfg.Algorithm,
+			"storage", cfg.Storage,
 		)
 
 		serverErr <- server.ListenAndServe()
@@ -88,12 +103,12 @@ func run() int {
 	select {
 	case err := <-serverErr:
 		if err != nil && err != http.ErrServerClosed {
-			log.Printf("server failed: %v", err)
+			slog.Error("server failed", "error", err)
 			exitCode = 1
 		}
 
 	case <-ctx.Done():
-		log.Println("shutdown signal received, finishing in-flight requests")
+		slog.Info("shutdown signal received, finishing in-flight requests")
 
 		stop()
 
@@ -104,21 +119,21 @@ func run() int {
 		defer cancel()
 
 		if err := server.Shutdown(shutdownCtx); err != nil {
-			log.Printf("error during server shutdown: %v", err)
+			slog.Error("error during server shutdown", "error", err)
 			exitCode = 1
 		} else {
-			log.Println("server stopped accepting new requests")
+			slog.Info("server stopped accepting new requests")
 		}
 	}
 
 	if err := closer.Close(); err != nil {
-		log.Printf("error closing rate limiter store: %v", err)
+		slog.Error("error closing rate limiter store", "error", err)
 		exitCode = 1
 	} else {
-		log.Println("rate limiter store closed")
+		slog.Info("rate limiter store closed")
 	}
 
-	log.Println("exiting")
+	slog.Info("exiting", "exit_code", exitCode)
 
 	return exitCode
 }
