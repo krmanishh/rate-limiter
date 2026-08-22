@@ -1,18 +1,6 @@
-# Go binaries
-/bin/
-/dist/
-*.exe
-*.exe~
-*.dll
-*.so
-*.dylib
-*.test
-
-# Coverage
-*.out
-coverage.txt
-coverage.html
-*.cover
+# This repo is split into backend/ (Go) and frontend/ (Next.js), each
+# with its own .gitignore for language-specific patterns. This file
+# only covers things that can show up anywhere in the tree.
 
 # IDE
 .idea/
@@ -23,9 +11,6 @@ coverage.html
 
 # OS
 .DS_Store
-
-# Docker
-docker-compose.override.yml
 
 # Environment / local secrets
 .env

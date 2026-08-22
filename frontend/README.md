@@ -16,8 +16,8 @@ data-fetching component calls the Go API directly from the browser.
   bucket) with a description and pros/cons for each. This is purely
   informational: it does not change what the live backend is running.
   The backend's algorithm is chosen at its own startup via
-  `RATE_LIMIT_ALGORITHM` and can't be changed at runtime — see the
-  root README's Configuration section.
+  `RATE_LIMIT_ALGORITHM` and can't be changed at runtime — see
+  [`../backend/README.md`](../backend/README.md)'s Configuration section.
 - **Request simulator** — enter a key and a request count, and it
   fires that many requests at `POST /api/v1/ratelimit/check`
   sequentially (with a small delay between each so the timeline is
@@ -36,7 +36,9 @@ npm run dev
 ```
 
 Then open `http://localhost:3000`. The Go API needs to be running
-separately (see the root README) — this app doesn't start it.
+separately — see [`../backend/README.md`](../backend/README.md), or
+the [repository root README](../README.md) for the two-terminal
+quickstart — this app doesn't start it.
 
 ### Configuration
 

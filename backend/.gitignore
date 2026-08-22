@@ -1,0 +1,18 @@
+# Go binaries
+/bin/
+/dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+
+# Coverage
+*.out
+coverage.txt
+coverage.html
+*.cover
+
+# Docker
+docker-compose.override.yml

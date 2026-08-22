@@ -8,6 +8,10 @@ on:
 permissions:
   contents: read
 
+defaults:
+  run:
+    working-directory: backend
+
 jobs:
   test:
     name: Build & Test
@@ -31,8 +35,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: backend/go.mod
           cache: true
+          cache-dependency-path: backend/go.sum
 
       - name: Check formatting (gofmt)
         run: |
@@ -66,13 +71,15 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: backend/go.mod
           cache: true
+          cache-dependency-path: backend/go.sum
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v8
         with:
           version: v2.13.1
+          working-directory: backend
 
   vulncheck:
     name: Vulnerability check
@@ -85,8 +92,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version-file: backend/go.mod
           cache: true
+          cache-dependency-path: backend/go.sum
 
       - name: govulncheck
         run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
