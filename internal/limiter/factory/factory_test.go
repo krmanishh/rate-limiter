@@ -2,10 +2,13 @@ package factory
 
 import (
 	"fmt"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/krmanishh/rate-limiter/internal/config"
+	"github.com/krmanishh/rate-limiter/internal/limiter"
 )
 
 func TestCreate_FixedWindow(t *testing.T) {
@@ -471,5 +474,77 @@ func TestCreate_RedisStorageClosesCleanly(t *testing.T) {
 
 	if err := closer.Close(); err != nil {
 		t.Fatalf("expected redis client to close cleanly, got error: %v", err)
+	}
+}
+
+// TestCreate_DistributedAcrossInstances is the actual reason Redis-backed
+// rate limiting exists: it proves the limit is enforced on the shared key,
+// not per process. Three independently created limiters — each with its
+// own Redis client, standing in for three separate app instances — all
+// hammer the same key concurrently. If each instance kept its own count
+// (as a memory limiter would), a limit of 5 would let through 5 x 3 = 15
+// requests total instead of 5.
+func TestCreate_DistributedAcrossInstances(t *testing.T) {
+	cfg := config.RateLimitConfig{
+		Algorithm:    config.FixedWindow,
+		Storage:      config.Redis,
+		RedisAddress: "localhost:6379",
+		Limit:        5,
+		WindowSize:   time.Minute,
+	}
+
+	const instanceCount = 3
+	const requestsPerInstance = 10 // 3 x 10 = 30 concurrent attempts against a limit of 5
+
+	instances := make([]limiter.RateLimiter, instanceCount)
+
+	for i := 0; i < instanceCount; i++ {
+		rateLimiter, closer, err := Create(cfg)
+
+		if err != nil {
+			t.Fatalf("failed to create instance %d: %v", i, err)
+		}
+
+		t.Cleanup(func() {
+			closer.Close()
+		})
+
+		instances[i] = rateLimiter
+	}
+
+	key := fmt.Sprintf("distributed-test-%d", time.Now().UnixNano())
+
+	var wg sync.WaitGroup
+
+	var allowedCount int64
+
+	for i := 0; i < instanceCount; i++ {
+		instance := instances[i]
+
+		for j := 0; j < requestsPerInstance; j++ {
+			wg.Add(1)
+
+			go func() {
+				defer wg.Done()
+
+				if instance.Allow(key).Allowed {
+					atomic.AddInt64(&allowedCount, 1)
+				}
+			}()
+		}
+	}
+
+	wg.Wait()
+
+	if allowedCount != int64(cfg.Limit) {
+		t.Fatalf(
+			"expected exactly %d allowed across %d simulated instances (not %d x %d = %d), got %d",
+			cfg.Limit,
+			instanceCount,
+			instanceCount,
+			requestsPerInstance,
+			instanceCount*requestsPerInstance,
+			allowedCount,
+		)
 	}
 }
