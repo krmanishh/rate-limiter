@@ -4,3 +4,30 @@ services:
     container_name: rate-limiter-redis
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  rate-limiter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rate-limiter-api
+    ports:
+      - "8080:8080"
+    environment:
+      RATE_LIMIT_ALGORITHM: fixed_window
+      RATE_LIMIT_STORAGE: redis
+      RATE_LIMIT_LIMIT: "5"
+      RATE_LIMIT_WINDOW: 1m
+      # Inside the Docker network, "redis" is the service name and
+      # resolves to the redis container. "localhost" here would mean
+      # the rate-limiter container itself, not the host machine or
+      # the redis container.
+      REDIS_ADDR: redis:6379
+      SERVER_PORT: "8080"
+    depends_on:
+      redis:
+        condition: service_healthy
