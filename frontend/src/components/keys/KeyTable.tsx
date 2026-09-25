@@ -87,13 +87,13 @@ function KeyRow({
   const { allowed, rejected, errors, last } = summarize(tracked);
 
   return (
-    <tr className={selected ? "bg-indigo-50 dark:bg-indigo-500/10" : undefined}>
+    <tr className={selected ? "bg-blue-50 dark:bg-blue-500/10" : undefined}>
       <td className="px-3 py-2">
         <button
           type="button"
           onClick={() => onSelect(tracked.key)}
           aria-current={selected ? "true" : undefined}
-          className="font-mono text-xs text-indigo-600 hover:underline dark:text-indigo-400"
+          className="font-mono text-xs text-blue-700 hover:underline dark:text-blue-400"
         >
           {tracked.key}
         </button>

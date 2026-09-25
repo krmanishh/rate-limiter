@@ -34,7 +34,7 @@ export default function AlgorithmUsageChart({ usage }: { usage: AlgorithmUsage[]
           </div>
           <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
             <div
-              className="h-full rounded-full bg-indigo-500"
+              className="h-full rounded-full bg-blue-700"
               style={{ width: `${(entry.requests / max) * 100}%` }}
             />
           </div>

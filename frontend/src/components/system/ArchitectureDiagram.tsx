@@ -14,7 +14,7 @@ function FlowNode({
     <div
       className={`min-w-[10rem] flex-1 rounded-lg border px-3 py-2 text-center ${
         highlight
-          ? "border-indigo-300 bg-indigo-50 dark:border-indigo-700 dark:bg-indigo-500/10"
+          ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-500/10"
           : "border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/40"
       }`}
     >

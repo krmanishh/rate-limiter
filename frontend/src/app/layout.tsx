@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import NavBar from "@/components/NavBar";
+import Sidebar from "@/components/Sidebar";
+import ThemeModeButton from "@/components/ThemeModeButton";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -43,9 +44,12 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
-      <body className="min-h-full flex flex-col bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-        <NavBar />
+      <body className="min-h-full flex flex-col bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100 md:flex-row">
+        <Sidebar />
         <div id="main-content" tabIndex={-1} className="flex flex-1 flex-col outline-none">
+          <div className="flex justify-end border-b border-slate-200 bg-white px-4 py-2 dark:border-slate-800 dark:bg-slate-950 sm:px-6 lg:px-8">
+            <ThemeModeButton />
+          </div>
           {children}
         </div>
       </body>
